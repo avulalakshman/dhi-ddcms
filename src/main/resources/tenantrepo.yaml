@@ -1,0 +1,6 @@
+dhiddcms:
+  tenantRepoDetails:
+    - tenantId: NCET
+      tenantLocation: /opt/NCET
+    - tenantId: AITE
+      tenantLocation: /opt/AITE
