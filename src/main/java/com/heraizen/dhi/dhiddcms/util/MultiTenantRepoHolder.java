@@ -37,7 +37,7 @@ public class MultiTenantRepoHolder {
                                                                       TenantRepoDetails::getTenantLocation));
         log.info("Total Tenant count is :{}",tenantRepMap.size());
     }
-    public Optional getTenantRepoLocation(String tenantId){
+    public Optional<String> getTenantRepoLocation(String tenantId){
         return Optional.ofNullable(tenantRepMap.get(tenantId));
     }
 }
