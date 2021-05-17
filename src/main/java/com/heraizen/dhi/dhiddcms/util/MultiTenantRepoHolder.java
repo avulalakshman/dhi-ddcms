@@ -1,7 +1,5 @@
 package com.heraizen.dhi.dhiddcms.util;
 
-import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -11,7 +9,11 @@ import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.concurrent.ConcurrentHashMap;
+import javax.jcr.Repository;
+import javax.jcr.RepositoryException;
+
+import org.apache.jackrabbit.commons.JcrUtils;
 
 @Configuration
 @ConfigurationProperties(prefix = "dhiddcms")
@@ -21,7 +23,8 @@ public class MultiTenantRepoHolder {
 
     private List<TenantRepoDetails> tenantRepoDetails;
 
-    private Map<String,String> tenantRepMap;
+    private final Map<String, Repository> tenantRepos = new ConcurrentHashMap<>();
+
     public List<TenantRepoDetails> getTenantRepoDetails() {
         return tenantRepoDetails;
     }
@@ -31,13 +34,25 @@ public class MultiTenantRepoHolder {
     }
 
     @PostConstruct
-    public void init(){
-        tenantRepMap = getTenantRepoDetails().stream()
-                                            .collect(Collectors.toMap(TenantRepoDetails::getTenantId,
-                                                                      TenantRepoDetails::getTenantLocation));
-        log.info("Total Tenant count is :{}",tenantRepMap.size());
+    public void init() {
+        getTenantRepoDetails().stream().forEach(t -> {
+            tenantRepos.computeIfAbsent(t.getTenantId(), l -> {
+                try {
+                    Repository r = JcrUtils.getRepository(l);
+                    log.info("Repository available for Tenant {} at {}",
+                            t.getTenantId(), l);
+                    return r;
+                } catch (RepositoryException e) {
+                    throw new RuntimeException(String.format("Could not get "
+                            + "hold of Repository for Tenant %s with location %s",
+                            t.getTenantId(), t.getTenantLocation()), e);
+                }
+            });
+            log.info("Total Tenant Repositories are : {}", tenantRepos.size());
+        });
     }
-    public Optional<String> getTenantRepoLocation(String tenantId){
-        return Optional.ofNullable(tenantRepMap.get(tenantId));
+
+    public Optional<Repository> getTenantRepo(String tenantId) {
+        return Optional.ofNullable(tenantRepos.get(tenantId));
     }
 }
