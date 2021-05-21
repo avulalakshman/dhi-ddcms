@@ -1,17 +1,16 @@
 package com.heraizen.dhi.dhiddcms.web;
 
+//<<<<<<< HEAD
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.heraizen.dhi.dhiddcms.model.Document;
 
-import com.heraizen.dhi.dhiddcms.model.Metadata;
-import com.heraizen.dhi.dhiddcms.service.DigitalLibMgmtService;
-import com.heraizen.dhi.dhiddcms.util.TenantContext;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
+//=======
+//>>>>>>> 55286555478c84ab7292054d68f7028f391ae6b4
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -25,6 +24,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.heraizen.dhi.dhiddcms.model.Metadata;
+import com.heraizen.dhi.dhiddcms.service.DigitalLibMgmtService;
+import com.heraizen.dhi.dhiddcms.util.TenantContext;
+
+import com.heraizen.dhi.dhiddcms.model.Document;
 
 @RestController
 @RequestMapping("/api/v1/")
