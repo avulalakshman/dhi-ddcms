@@ -10,8 +10,8 @@ import java.util.Optional;
 @SpringBootTest
 public class MultiTenantRepoHolderTest {
 
-    @Autowired
-    private MultiTenantRepoHolder multiTenantRepoHolder;
+//    @Autowired
+//    private MultiTenantRepoHolder multiTenantRepoHolder;
 
     @Test
     public void testNoOp() {

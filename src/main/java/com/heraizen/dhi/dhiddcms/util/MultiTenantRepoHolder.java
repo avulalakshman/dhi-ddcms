@@ -1,5 +1,6 @@
 package com.heraizen.dhi.dhiddcms.util;
 
+import com.heraizen.dhi.dhiddcms.service.JcrWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -10,10 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.jcr.Credentials;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
+import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.commons.JcrUtils;
+import org.springframework.util.StringUtils;
 
 @Configuration
 @ConfigurationProperties(prefix = "dhiddcms")
@@ -23,8 +27,8 @@ public class MultiTenantRepoHolder {
 
     private List<TenantRepoDetails> tenantRepoDetails;
 
-    private final Map<String, Repository> tenantRepos = new ConcurrentHashMap<>();
-
+    private final Map<String, JcrWrapper> tenantRepos = new ConcurrentHashMap<>();
+    
     public List<TenantRepoDetails> getTenantRepoDetails() {
         return tenantRepoDetails;
     }
@@ -35,13 +39,17 @@ public class MultiTenantRepoHolder {
 
     @PostConstruct
     public void init() {
+        Credentials cred = new SimpleCredentials("admin", "admin".toCharArray());
         getTenantRepoDetails().stream().forEach(t -> {
-            tenantRepos.computeIfAbsent(t.getTenantId(), l -> {
+            tenantRepos.computeIfAbsent(t.getTenantId(), tid -> {
                 try {
-                    Repository r = JcrUtils.getRepository(l);
+                    log.debug(" Trying to initiate repository for "
+                            + "Tenant id {} at location {}", 
+                            tid, t.getTenantLocation());
+                    Repository r = JcrUtils.getRepository(t.getTenantLocation());
                     log.info("Repository available for Tenant {} at {}",
-                            t.getTenantId(), l);
-                    return r;
+                            t.getTenantId(), t.getTenantLocation());
+                    return new JcrWrapper(r, cred);
                 } catch (RepositoryException e) {
                     throw new RuntimeException(String.format("Could not get "
                             + "hold of Repository for Tenant %s with location %s",
@@ -52,7 +60,18 @@ public class MultiTenantRepoHolder {
         });
     }
 
-    public Optional<Repository> getTenantRepo(String tenantId) {
-        return Optional.ofNullable(tenantRepos.get(tenantId));
+    public Optional<JcrWrapper> getTenantRepo(String tenantId) {
+        if (StringUtils.hasText(tenantId)) {
+            return Optional.ofNullable(tenantRepos.get(tenantId));
+        } else {
+            return Optional.empty();
+        }
+    }
+    
+    public JcrWrapper getCurrentTenantRepo() {
+        String currentTenant = TenantContext.getCurrentTenant();
+        return getTenantRepo(currentTenant)
+                .orElseThrow(()->new RuntimeException(String.format("JCR for Tenant id %s not found",
+                        currentTenant)));
     }
 }
