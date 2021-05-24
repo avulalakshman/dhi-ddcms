@@ -1,6 +1,5 @@
 package com.heraizen.dhi.dhiddcms.web;
 
-//<<<<<<< HEAD
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -9,8 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
-//=======
-//>>>>>>> 55286555478c84ab7292054d68f7028f391ae6b4
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,6 +28,12 @@ import com.heraizen.dhi.dhiddcms.service.DigitalLibMgmtService;
 import com.heraizen.dhi.dhiddcms.util.TenantContext;
 
 import com.heraizen.dhi.dhiddcms.model.Document;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.util.Optional;
+import java.util.Set;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
 
 @RestController
 @RequestMapping("/api/v1/")
@@ -89,14 +93,46 @@ public class DocumentController {
         return new ResponseEntity<>("Done", HttpStatus.OK);
     }
     
-    @GetMapping("metadata/{docname}")
-    public ResponseEntity<?> getDocMetadata(@PathVariable String docname) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
+    @GetMapping("{tenant}/metadata/{docname}")
+    public ResponseEntity<?> getDocMetadata(@PathVariable String tenant, @PathVariable String docname) {
+        log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
+        TenantContext.setTenant(tenant);
+        Optional<Metadata> md = digiLibSvc.getDocumentMetadata(docname);
+        if ( md.isPresent() ) {
+            return new ResponseEntity<>(md.get(), HttpStatus.OK);
+        } else {
+            return new ResponseEntity<>("Document by name "+ docname + "Not found for Tenant " + tenant, HttpStatus.NOT_FOUND);
+        }
     }
 
-    @GetMapping("{docid}")
-    public ResponseEntity<?> getDoc(@PathVariable String docid) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
+    @GetMapping("{tenant}/{docid}")
+    public ResponseEntity<?> getDoc(@PathVariable String tenant, @PathVariable String docname) throws FileNotFoundException {
+        log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
+        TenantContext.setTenant(tenant);
+        Optional<Document> doc = digiLibSvc.getDocument(docname);
+        log.info("Returning Document {}", doc);
+        if (doc.isPresent()) {
+            try {
+                Document d = doc.get();
+                log.debug("Mime type : {}", d.getMimeType());
+                MediaType mt = MediaType.valueOf(d.getMimeType());
+                log.debug("Media Type : {}", mt);
+                InputStreamResource resource = new InputStreamResource(new FileInputStream(doc.get().getFile()));
+                return ResponseEntity.ok()
+                // Content-Disposition
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + d.getName())
+                    // Content-Type
+                    .contentType(mt)
+                    // Contet-Length
+                    .contentLength(d.getFile().length()) //
+                    .body(resource);
+            }catch ( FileNotFoundException fe) {
+                log.error("Error while sending the Document ", fe);
+                return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found" , HttpStatus.NOT_FOUND);
+            }
+        } else {
+            return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found" , HttpStatus.NOT_FOUND);
+        }
     }
 
     @PutMapping("{docid}/")
@@ -104,8 +140,11 @@ public class DocumentController {
         return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
     }
 
-    @GetMapping("search/{searchkeyword}")
-    public ResponseEntity<?> search(@PathVariable String searchkeyword) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
+    @GetMapping("{tenant}/search/{searchkeyword}")
+    public ResponseEntity<?> search(@PathVariable String tenant, @PathVariable String searchkeyword) {
+        log.debug("Invoked search for tenant {} and search string {}", tenant, searchkeyword);
+        TenantContext.setTenant(tenant);
+        Set<String> docNames = digiLibSvc.search(searchkeyword);
+        return new ResponseEntity<>(docNames, HttpStatus.OK);
     }
 }
