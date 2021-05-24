@@ -105,7 +105,7 @@ public class DocumentController {
         }
     }
 
-    @GetMapping("{tenant}/{docid}")
+    @GetMapping("{tenant}/{docname}")
     public ResponseEntity<?> getDoc(@PathVariable String tenant, @PathVariable String docname) throws FileNotFoundException {
         log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
         TenantContext.setTenant(tenant);

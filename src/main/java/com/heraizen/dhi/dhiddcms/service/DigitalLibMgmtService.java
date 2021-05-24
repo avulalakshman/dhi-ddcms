@@ -230,7 +230,7 @@ public class DigitalLibMgmtService {
         Set<String> docNames = new HashSet<>();
         repoHolder.getCurrentTenantRepo().doWithWorkspace(DIGILIB_WORKSPACE, (session) -> {
             try {
-                String expression = "SELECT * from [nt:base] AS n WHERE NAME() LIKE '%" + str + "%' OR CONTAINS(n.[jcr:data | dlib:*], '" + str + "')";
+                String expression = "SELECT * from [nt:base] AS n WHERE NAME() LIKE '%" + str + "%' OR CONTAINS(n.[jcr:data], '" + str + "')";
                 log.info("The Query string is {}", expression);
                 Query q = session.getWorkspace().getQueryManager()
                         .createQuery(expression, javax.jcr.query.Query.JCR_SQL2);
