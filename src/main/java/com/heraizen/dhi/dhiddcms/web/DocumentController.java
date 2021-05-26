@@ -30,6 +30,7 @@ import com.heraizen.dhi.dhiddcms.util.TenantContext;
 import com.heraizen.dhi.dhiddcms.model.Document;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.nio.charset.Charset;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.core.io.InputStreamResource;
@@ -42,26 +43,28 @@ public class DocumentController {
 
     @Autowired
     private DigitalLibMgmtService digiLibSvc;
-    
+
     @Autowired
     private ObjectMapper objectMapper;
 
-    private Document getDocument(MultipartFile multipartFile, String metadataStr) {
+    private Document toDocument(MultipartFile multipartFile, String metadataStr) {
         try {
             Path tempFile = Files.createTempFile("dlib", "tmp");
             String fileName = multipartFile.getOriginalFilename();
             String mimeType = multipartFile.getContentType();
+            //String encoding = Charset.defaultCharset().name(); // or set to UTF-8
+            String encoding = "UTF-8"; 
             Metadata metadata = objectMapper.readValue(metadataStr, Metadata.class);
-            log.debug("Extracting document fileName: {} \n mimeType: {} \n encoding : UTF_8 \n MetaData : {} \n ", fileName, mimeType, metadata);
+            log.debug("Extracting document fileName: {} \n mimeType: {} \n encoding : {} \n MetaData : {} \n ", fileName, mimeType, encoding, metadata);
             multipartFile.transferTo(tempFile);
             return Document.builder()
                     .file(tempFile.toFile())
                     .name(fileName)
                     .mimeType(multipartFile.getContentType())
-                    .encoding("UTF_8")
+                    .encoding(encoding) 
                     .metadata(metadata)
                     .build();
-        } catch (JsonProcessingException jpe ) {
+        } catch (JsonProcessingException jpe) {
             log.error("Error while parsing metadata", jpe.getMessage());
             log.debug("Stack trace :", jpe);
         } catch (IOException ie) {
@@ -75,9 +78,9 @@ public class DocumentController {
     public ResponseEntity<?> save(@PathVariable String tenant, @RequestPart("file") MultipartFile multipartFile,
             @RequestPart("metadata") String metadata) {
         TenantContext.setTenant(tenant);
-        Document doc = getDocument(multipartFile, metadata);
-        if ( Objects.isNull(doc)) {
-            return new ResponseEntity<>("Could not Read the Document OR MetaData of Request", 
+        Document doc = toDocument(multipartFile, metadata);
+        if (Objects.isNull(doc)) {
+            return new ResponseEntity<>("Could not Read the Document OR MetaData of Request",
                     HttpStatus.BAD_REQUEST);
         }
         digiLibSvc.saveDoc(doc);
@@ -92,16 +95,16 @@ public class DocumentController {
         digiLibSvc.dumpWorkspace();
         return new ResponseEntity<>("Done", HttpStatus.OK);
     }
-    
+
     @GetMapping("{tenant}/metadata/{docname}")
     public ResponseEntity<?> getDocMetadata(@PathVariable String tenant, @PathVariable String docname) {
         log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
         TenantContext.setTenant(tenant);
         Optional<Metadata> md = digiLibSvc.getDocumentMetadata(docname);
-        if ( md.isPresent() ) {
+        if (md.isPresent()) {
             return new ResponseEntity<>(md.get(), HttpStatus.OK);
         } else {
-            return new ResponseEntity<>("Document by name "+ docname + "Not found for Tenant " + tenant, HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>("Document by name " + docname + "Not found for Tenant " + tenant, HttpStatus.NOT_FOUND);
         }
     }
 
@@ -119,19 +122,19 @@ public class DocumentController {
                 log.debug("Media Type : {}", mt);
                 InputStreamResource resource = new InputStreamResource(new FileInputStream(doc.get().getFile()));
                 return ResponseEntity.ok()
-                // Content-Disposition
-                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + d.getName())
-                    // Content-Type
-                    .contentType(mt)
-                    // Contet-Length
-                    .contentLength(d.getFile().length()) //
-                    .body(resource);
-            }catch ( FileNotFoundException fe) {
+                        // Content-Disposition
+                        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + d.getName())
+                        // Content-Type
+                        .contentType(mt)
+                        // Contet-Length
+                        .contentLength(d.getFile().length()) //
+                        .body(resource);
+            } catch (FileNotFoundException fe) {
                 log.error("Error while sending the Document ", fe);
-                return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found" , HttpStatus.NOT_FOUND);
+                return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found", HttpStatus.NOT_FOUND);
             }
         } else {
-            return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found" , HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found", HttpStatus.NOT_FOUND);
         }
     }
 
@@ -146,5 +149,13 @@ public class DocumentController {
         TenantContext.setTenant(tenant);
         Set<String> docNames = digiLibSvc.search(searchkeyword);
         return new ResponseEntity<>(docNames, HttpStatus.OK);
+    }
+
+    @PostMapping("{tenant}/deletedoc/{docname}")
+    public ResponseEntity<?> deleteDoc(@PathVariable String tenant, @PathVariable String docname) {
+        log.debug("Invoked delete document {} for tenant {}");
+        TenantContext.setTenant(tenant);
+        digiLibSvc.deleteDoc(docname);
+        return new ResponseEntity<>(docname + " deleted for tenant " + tenant, HttpStatus.OK);
     }
 }
