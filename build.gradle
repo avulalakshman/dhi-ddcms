@@ -25,9 +25,8 @@ dependencies {
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 	annotationProcessor 'org.projectlombok:lombok'
         
-        compile ('javax.jcr:jcr:2.0')
-        compile ('org.apache.jackrabbit:jackrabbit-core:2.20.2')
-    
+        implementation 'javax.jcr:jcr:2.0'
+        implementation 'org.apache.jackrabbit:jackrabbit-core:2.20.2'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }
 

@@ -32,6 +32,7 @@ import javax.jcr.PropertyIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.Value;
+import javax.jcr.nodetype.NodeType;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
 import lombok.extern.slf4j.Slf4j;
@@ -75,17 +76,26 @@ public class DigitalLibMgmtService {
         try (InputStream stream = new BufferedInputStream(new FileInputStream(doc.getFile()))) {
             log.info("Adding {} into the repository...", doc.getName());
             //Create the the file node
-            Node fileNode = node.addNode(doc.getName(), "nt:file");
+            Node fileNode = node.addNode(doc.getName(), NodeType.NT_FILE); //"nt:file"
             //create the mandatory child node - jcr:content
-            Node resNode = fileNode.addNode("jcr:content", "nt:resource");
+            Node resNode = fileNode.addNode(Node.JCR_CONTENT, NodeType.NT_RESOURCE);  //"jcr:content", "nt:resource"
 
             Binary binary = session.getValueFactory().createBinary(stream);
-            resNode.setProperty("jcr:data", binary);
-            resNode.setProperty("jcr:mimeType", doc.getMimeType());
-            resNode.setProperty("jcr:encoding", doc.getEncoding());
+            resNode.setProperty(Property.JCR_DATA, binary); // "jcr:data"
+            resNode.setProperty(Property.JCR_MIMETYPE, doc.getMimeType()); // "jcr:mimeType"
+            resNode.setProperty(Property.JCR_ENCODING, doc.getEncoding()); //"jcr:encoding"
 
-            //NOTE: see NOTE for setMetaData
-            //setMetaData(fileNode, doc.getMetadata());
+            log.debug("\n\n Saving session \n\n");
+            session.save();
+            log.debug("\n\n Waiting for the index to be created \n\n");
+            try {
+                Thread.sleep(20000);
+                //NOTE: see NOTE for setMetaData
+                //setMetaData(fileNode, doc.getMetadata());
+            } catch (InterruptedException ex) {
+                log.error("Interrupted during wait for index creation", ex);
+            }
+            
         } catch (IOException ie) {
             logAndThrowException(String.format("IO Exception occured while adding file %s to JCR",
                     doc.getName()), ie, (e, t) -> new RuntimeException(e, t));
@@ -118,7 +128,7 @@ public class DigitalLibMgmtService {
         try {
             if (parentNode.hasNode(docName)) {
                 Node fileNode = parentNode.getNode(docName);
-                if (fileNode.isNodeType("nt:file")) {
+                if (fileNode.isNodeType(NodeType.NT_FILE)) {  //"nt:file"
                     return Optional.of(fileNode);
                 }
             }
@@ -133,12 +143,12 @@ public class DigitalLibMgmtService {
         Document doc = new Document();
         try {
             doc.setName(fileNode.getName());
-            Node resNode = fileNode.getNode("jcr:content");
+            Node resNode = fileNode.getNode(Node.JCR_CONTENT);  //
             PropertyIterator pi = resNode.getProperties("jcr:data | jcr:mimeType | jcr:encoding");
             while (pi.hasNext()) {
                 Property p = pi.nextProperty();
                 switch (p.getName()) {
-                    case "jcr:data":
+                    case Property.JCR_DATA:     //"jcr:data"
                         try (InputStream in = p.getBinary().getStream()) {
                             Path file = Files.createTempFile(null, null);
                             Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
@@ -148,10 +158,10 @@ public class DigitalLibMgmtService {
                                     doc.getName()), ie, (e, t) -> new RuntimeException(e, t));
                         }
                         break;
-                    case "jcr:mimeType":
+                    case Property.JCR_MIMETYPE:   //"jcr:mimeType"
                         doc.setMimeType(p.getString());
                         break;
-                    case "jcr:encoding":
+                    case Property.JCR_ENCODING:  //"jcr:encoding"
                         doc.setEncoding(p.getString());
                         break;
                     default:
@@ -161,14 +171,14 @@ public class DigitalLibMgmtService {
         } catch (RepositoryException re) {
             logAndThrowException(String.format("Error while getting document %s ", doc.getName()),
                     re, (e, t) -> new JcrException(e, t));
-        } 
+        }
         return doc;
     }
 
     private Optional<Document> getDocument(Node parentNode, String docName) {
         return findDocNode(parentNode, docName).map(n -> {
             Document doc = extractDocument(n);
-            doc.setMetadata(extractMetadata(parentNode));
+            doc.setMetadata(extractMetadata(n));
             return doc;
         });
     }
@@ -234,33 +244,47 @@ public class DigitalLibMgmtService {
         return t.get();
     }
 
+    public Set<String> executeQuery(Session session, String expression) {
+        log.debug("The search expression {}", expression);
+        Set<String> docNames = new HashSet<>();
+        try {
+            Query q = session.getWorkspace().getQueryManager()
+                    .createQuery(expression, javax.jcr.query.Query.JCR_SQL2);
+            QueryResult result = q.execute();
+            NodeIterator ni = result.getNodes();
+            while (ni.hasNext()) {
+                Node n = ni.nextNode();
+                log.debug(" Received node {} with path {} in search result", n.getName(), n.getPath());
+                if (n.isNodeType(NodeType.NT_FILE)) {  //"nt:file"
+                    String path = n.getPath();
+                    log.debug("Adding path {} to the search return set", path);
+                    docNames.add(path);
+                } else if (n.isNodeType(NodeType.NT_RESOURCE)) {   //"nt:resource"
+                    String path = n.getParent().getPath();
+                    log.debug("Adding path {} to the search return set", path);
+                    docNames.add(path);
+                }
+            }
+            log.debug("Done with search result iterating");
+        } catch (RepositoryException re) {
+            logAndThrowException("Error while searching the JCR ", re, (e, t) -> new JcrException(e, t));
+        }
+        return docNames;
+    }
+
+    //
+    //NOTE: both the following search queries are working for search text "text" 
+    //  "SELECT * from [nt:base] as n WHERE CONTAINS(n.*, '" + str + "')";
+    //  "SELECT * from [nt:resource] as n WHERE CONTAINS(n.*, '" + str + "')";
+    // as one of the property ( jcr:mimetype ) contains a value text
+    // however jcr:data is not working since we have put type as binary.
+    // we will have to see enabling tika parser for binary
+    //
     public Set<String> search(String str) {
         Set<String> docNames = new HashSet<>();
         repoHolder.getCurrentTenantRepo().doWithWorkspace(DIGILIB_WORKSPACE, (session) -> {
-            try {
-                String expression = "SELECT * from [nt:base] as n WHERE CONTAINS(n.[jcr:data], '" + str + "')";
-                log.info("The Query string is {}", expression);
-                Query q = session.getWorkspace().getQueryManager()
-                        .createQuery(expression, javax.jcr.query.Query.JCR_SQL2);
-                QueryResult result = q.execute();
-                NodeIterator ni = result.getNodes();
-                while (ni.hasNext()) {
-                    Node n = ni.nextNode();
-                    log.debug(" Received node {} with path {} in search result", n.getName(), n.getPath());
-                    if (n.isNodeType("nt:file")) {
-                        String path = n.getPath();
-                        log.debug("Adding path {} to the search return set", path);
-                        docNames.add(path);
-                    } else if (n.isNodeType("nt:resource")) {
-                        String path = n.getParent().getPath();
-                        log.debug("Adding path {} to the search return set", path);
-                        docNames.add(path);
-                    }
-                }
-                log.debug("Done with search result iterating");
-            } catch (RepositoryException re) {
-                logAndThrowException("Error while searching the JCR ", re, (e, t) -> new JcrException(e, t));
-            }
+            String expression = "SELECT * from [nt:resource] as n WHERE CONTAINS(n.*, '" + str + "')";
+            docNames.addAll(executeQuery(session, expression));
         }, false);
         return docNames;
     }
@@ -291,5 +315,5 @@ public class DigitalLibMgmtService {
                 .doWithNode(DIGILIB_WORKSPACE, Optional.empty(),
                         (s, rootNode) -> JcrUtil.dump(rootNode), false);
     }
-
+    
 }
