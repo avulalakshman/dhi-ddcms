@@ -29,12 +29,10 @@ import com.heraizen.dhi.dhiddcms.util.TenantContext;
 
 import com.heraizen.dhi.dhiddcms.model.Document;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.nio.charset.Charset;
-import java.util.Optional;
 import java.util.Set;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/api/v1/")
@@ -52,16 +50,15 @@ public class DocumentController {
             Path tempFile = Files.createTempFile("dlib", "tmp");
             String fileName = multipartFile.getOriginalFilename();
             String mimeType = multipartFile.getContentType();
-            //String encoding = Charset.defaultCharset().name(); // or set to UTF-8
-            String encoding = "UTF-8"; 
+            String encoding = "UTF-8";
             Metadata metadata = objectMapper.readValue(metadataStr, Metadata.class);
             log.debug("Extracting document fileName: {} \n mimeType: {} \n encoding : {} \n MetaData : {} \n ", fileName, mimeType, encoding, metadata);
             multipartFile.transferTo(tempFile);
             return Document.builder()
                     .file(tempFile.toFile())
                     .name(fileName)
-                    .mimeType(multipartFile.getContentType())
-                    .encoding(encoding) 
+                    .mimeType(mimeType)
+                    .encoding(encoding)
                     .metadata(metadata)
                     .build();
         } catch (JsonProcessingException jpe) {
@@ -80,48 +77,37 @@ public class DocumentController {
         TenantContext.setTenant(tenant);
         Document doc = toDocument(multipartFile, metadata);
         if (Objects.isNull(doc)) {
-            return new ResponseEntity<>("Could not Read the Document OR MetaData of Request",
+            return new ResponseEntity<>("Could not read the Document OR MetaData of Request",
                     HttpStatus.BAD_REQUEST);
         }
         digiLibSvc.saveDoc(doc);
-        return new ResponseEntity<>("Document successfull Uploaded", HttpStatus.CREATED);
-    }
-
-    @GetMapping("{tenant}/dumpws")
-    public ResponseEntity<?> dumpWorkspace(@PathVariable String tenant) {
-        log.debug("Invoked dump ws for tenant {}", tenant);
-        TenantContext.setTenant(tenant);
-        log.debug("Getting Tenant as {}", TenantContext.getCurrentTenant());
-        digiLibSvc.dumpWorkspace();
-        return new ResponseEntity<>("Done", HttpStatus.OK);
+        return new ResponseEntity<>(String.format("Document %s successfully Uploaded", doc.getName()),
+                HttpStatus.CREATED);
     }
 
     @GetMapping("{tenant}/metadata/{docname}")
     public ResponseEntity<?> getDocMetadata(@PathVariable String tenant, @PathVariable String docname) {
         log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
         TenantContext.setTenant(tenant);
-        Optional<Metadata> md = digiLibSvc.getDocumentMetadata(docname);
-        if (md.isPresent()) {
-            return new ResponseEntity<>(md.get(), HttpStatus.OK);
-        } else {
-            return new ResponseEntity<>("Document by name " + docname + "Not found for Tenant " + tenant, HttpStatus.NOT_FOUND);
-        }
+        return digiLibSvc.getDocumentMetadata(docname)
+                .map(md->new ResponseEntity<>(md, HttpStatus.OK))
+                .orElseGet(()->(ResponseEntity)new ResponseEntity<>("Document %s not found", 
+                        HttpStatus.NOT_FOUND));
     }
 
     @GetMapping("{tenant}/{docname}")
-    public ResponseEntity<?> getDoc(@PathVariable String tenant, @PathVariable String docname) throws FileNotFoundException {
+    public ResponseEntity<?> getDoc(@PathVariable String tenant, @PathVariable String docname) {
         log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
         TenantContext.setTenant(tenant);
-        Optional<Document> doc = digiLibSvc.getDocument(docname);
-        log.info("Returning Document {}", doc);
-        if (doc.isPresent()) {
-            try {
-                Document d = doc.get();
-                log.debug("Mime type : {}", d.getMimeType());
-                MediaType mt = MediaType.valueOf(d.getMimeType());
-                log.debug("Media Type : {}", mt);
-                InputStreamResource resource = new InputStreamResource(new FileInputStream(doc.get().getFile()));
-                return ResponseEntity.ok()
+        return digiLibSvc.getDocument(docname).map(d -> {
+            log.info("Found Document {} in Digi Lib...Returning", d.getName());
+            log.debug("Mime type : {}", d.getMimeType());
+            MediaType mt = MediaType.valueOf(d.getMimeType());
+            log.debug("Media Type : {}", mt);
+            ResponseEntity<?> retEntity;
+            try (FileInputStream fileStream = new FileInputStream(d.getFile())) {
+                InputStreamResource resource = new InputStreamResource(fileStream);
+                retEntity = ResponseEntity.ok()
                         // Content-Disposition
                         .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=" + d.getName())
                         // Content-Type
@@ -129,25 +115,35 @@ public class DocumentController {
                         // Contet-Length
                         .contentLength(d.getFile().length()) //
                         .body(resource);
-            } catch (FileNotFoundException fe) {
-                log.error("Error while sending the Document ", fe);
-                return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found", HttpStatus.NOT_FOUND);
+            } catch (IOException ex) {
+                String errMsg = String.format("Something wrong with IO while returning document %s error: %s",
+                        docname, ex.getMessage());
+                log.error(errMsg);
+                log.debug("Stack trace:", ex);
+                retEntity = new ResponseEntity<>(errMsg, HttpStatus.INTERNAL_SERVER_ERROR);
             }
-        } else {
-            return new ResponseEntity<>("Document by name " + docname + " for tenant " + tenant + " Not found", HttpStatus.NOT_FOUND);
-        }
+            return retEntity;
+        }).orElseGet(() -> (ResponseEntity) new ResponseEntity<>(String.format("Document by name %s not found"
+                + " for tenant %s", docname, tenant),
+                HttpStatus.NOT_FOUND));
     }
 
-    @PutMapping("{docid}/")
-    public ResponseEntity<?> updateMetadata(@PathVariable String docid, @RequestBody Metadata metadata) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
-    }
-
-    @GetMapping("{tenant}/search/{searchkeyword}")
-    public ResponseEntity<?> search(@PathVariable String tenant, @PathVariable String searchkeyword) {
-        log.debug("Invoked search for tenant {} and search string {}", tenant, searchkeyword);
+    @PutMapping("/{tenant}/update_metadata/{docname}")
+    public ResponseEntity<?> updateMetadata(@PathVariable String tenant, @PathVariable String docname, @RequestBody Metadata metadata) {
         TenantContext.setTenant(tenant);
-        Set<String> docNames = digiLibSvc.search(searchkeyword);
+        return digiLibSvc.updateDocumentMetadata(docname, metadata)
+                .map(md -> new ResponseEntity<>(String.format("Updated %s Metada with %s", docname, md),
+                HttpStatus.ACCEPTED))
+                .orElse(new ResponseEntity<>(String.format("Something is wrong, "
+                        + "could not update the doc %s metadata %s...", docname, metadata),
+                        HttpStatus.BAD_REQUEST));
+    }
+
+    @GetMapping("{tenant}/search")
+    public ResponseEntity<?> search(@PathVariable String tenant, @RequestParam String searchStr) {
+        log.debug("Invoked search for tenant {} and search string {}", tenant, searchStr);
+        TenantContext.setTenant(tenant);
+        Set<String> docNames = digiLibSvc.search(searchStr);
         return new ResponseEntity<>(docNames, HttpStatus.OK);
     }
 
@@ -157,5 +153,13 @@ public class DocumentController {
         TenantContext.setTenant(tenant);
         digiLibSvc.deleteDoc(docname);
         return new ResponseEntity<>(docname + " deleted for tenant " + tenant, HttpStatus.OK);
+    }
+
+    @GetMapping("{tenant}/dumpws")
+    public ResponseEntity<?> dumpWorkspace(@PathVariable String tenant) {
+        log.debug("Invoked dump ws for tenant {}", tenant);
+        TenantContext.setTenant(tenant);
+        digiLibSvc.dumpWorkspace();
+        return new ResponseEntity<>("Done", HttpStatus.OK);
     }
 }

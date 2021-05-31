@@ -7,8 +7,11 @@ package com.heraizen.dhi.dhiddcms.service;
 
 import com.heraizen.dhi.dhiddcms.model.Document;
 import com.heraizen.dhi.dhiddcms.model.Metadata;
+import com.heraizen.dhi.dhiddcms.util.DlibConstants;
 import com.heraizen.dhi.dhiddcms.util.MultiTenantRepoHolder;
-import com.heraizen.dhi.dhiddcms.util.JcrUtil;
+import com.heraizen.dhi.dhiddcms.util.DlibUtil;
+import static com.heraizen.dhi.dhiddcms.util.DlibUtil.toStringArray;
+import static com.heraizen.dhi.dhiddcms.util.DlibUtil.toStringSet;
 import java.io.BufferedInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -16,14 +19,11 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.function.Supplier;
 import javax.jcr.Binary;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
@@ -31,7 +31,6 @@ import javax.jcr.Property;
 import javax.jcr.PropertyIterator;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
-import javax.jcr.Value;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
@@ -50,78 +49,14 @@ public class DigitalLibMgmtService {
     @Autowired
     MultiTenantRepoHolder repoHolder;
 
-//    public static final Optional<String> DIGILIB_WORKSPACE = Optional.of("__dhi_digitalLibrary__");
-    public static final Optional<String> DIGILIB_WORKSPACE = Optional.empty();
+    public static final Optional<String> DIGILIB_WORKSPACE = Optional.of(DlibConstants.DLIB_WS_NAME);
+    public static final Optional<String> DIGILIB_ROOTNODE = Optional.empty();
 
-    private void logAndThrowException(String errMsg, Throwable t,
+    private static void logAndThrowException(String errMsg, Throwable t,
             BiFunction<String, Throwable, RuntimeException> supplier) {
-        log.error(errMsg + ":" + t.getMessage());
+        log.error(errMsg + ((t == null) ? "" : " : " + t.getMessage()));
         log.debug("Error Stack trace", t);
         throw supplier.apply(errMsg, t);
-    }
-
-    private String[] toArray(Collection<String> c, Function<String, String> transformer) {
-        return c.stream().map(transformer).toArray(i -> new String[i]);
-    }
-
-    private Set<String> toStringSet(Supplier<Set<String>> supplier, Value[] vals) throws RepositoryException {
-        Set<String> coll = supplier.get();
-        for (Value v : vals) {
-            coll.add(v.getString());
-        }
-        return coll;
-    }
-
-    protected void createFileNode(Document doc, Session session, Node node) {
-        try (InputStream stream = new BufferedInputStream(new FileInputStream(doc.getFile()))) {
-            log.info("Adding {} into the repository...", doc.getName());
-            //Create the the file node
-            Node fileNode = node.addNode(doc.getName(), NodeType.NT_FILE); //"nt:file"
-            //create the mandatory child node - jcr:content
-            Node resNode = fileNode.addNode(Node.JCR_CONTENT, NodeType.NT_RESOURCE);  //"jcr:content", "nt:resource"
-
-            Binary binary = session.getValueFactory().createBinary(stream);
-            resNode.setProperty(Property.JCR_DATA, binary); // "jcr:data"
-            resNode.setProperty(Property.JCR_MIMETYPE, doc.getMimeType()); // "jcr:mimeType"
-            resNode.setProperty(Property.JCR_ENCODING, doc.getEncoding()); //"jcr:encoding"
-
-            log.debug("\n\n Saving session \n\n");
-            session.save();
-            log.debug("\n\n Waiting for the index to be created \n\n");
-            try {
-                Thread.sleep(20000);
-                //NOTE: see NOTE for setMetaData
-                //setMetaData(fileNode, doc.getMetadata());
-            } catch (InterruptedException ex) {
-                log.error("Interrupted during wait for index creation", ex);
-            }
-            
-        } catch (IOException ie) {
-            logAndThrowException(String.format("IO Exception occured while adding file %s to JCR",
-                    doc.getName()), ie, (e, t) -> new RuntimeException(e, t));
-        } catch (RepositoryException re) {
-            logAndThrowException(String.format("JCR Exception occured while adding file %s to JCR",
-                    doc.getName()), re, (e, t) -> new JcrException(e, t));
-        }
-    }
-
-    //NOTE: Two issues
-    // dlib namespace prefix is NOT registered - hence unable to use the properties with that prefix
-    // NodeType nt:file do not accept other properties
-    protected void setMetaData(Node fileNode, Metadata metadata) throws RepositoryException {
-        fileNode.setProperty("dlib:barcode", metadata.getBarCode());
-        fileNode.setProperty("dlib:isbn", metadata.getIsbn());
-        fileNode.setProperty("dlib:authors",
-                toArray(metadata.getAuthorNames(), s -> s));
-        fileNode.setProperty("dlib:summary", metadata.getSummary());
-        fileNode.setProperty("dlib:tags",
-                toArray(metadata.getTags(), String::toLowerCase));
-    }
-
-    public void saveDoc(Document doc) {
-        repoHolder.getCurrentTenantRepo()
-                .doWithNode(DIGILIB_WORKSPACE, Optional.empty(),
-                        (session, node) -> createFileNode(doc, session, node), true);
     }
 
     protected Optional<Node> findDocNode(Node parentNode, String docName) {
@@ -139,23 +74,118 @@ public class DigitalLibMgmtService {
         return Optional.empty();
     }
 
+    protected void createFileNode(Document doc, Session session, Node node) {
+        Binary jcrBinaryData = null;
+        try (InputStream stream = new BufferedInputStream(new FileInputStream(doc.getFile()))) {
+            log.info("Adding {} into the repository...", doc.getName());
+            //Create the the file node
+            Node fileNode = node.addNode(doc.getName(), NodeType.NT_FILE); 
+            //create the mandatory child node - jcr:content
+            Node resNode = fileNode.addNode(Node.JCR_CONTENT, NodeType.NT_RESOURCE);  
+
+            jcrBinaryData = session.getValueFactory().createBinary(stream);
+            resNode.setProperty(Property.JCR_DATA, jcrBinaryData);         // "jcr:data"
+            resNode.setProperty(Property.JCR_MIMETYPE, doc.getMimeType()); // "jcr:mimeType"
+            resNode.setProperty(Property.JCR_ENCODING, doc.getEncoding()); // "jcr:encoding"
+            // nt:resource node type does not accept other properties
+            // Add/Set a mixin type which enhances node type to accept 
+            // metadata namespace and properties
+            resNode.addMixin(DlibConstants.DLIB_NT_METADATA);
+            setMetaDataTo(resNode, doc.getMetadata());
+
+        } catch (IOException ie) {
+            logAndThrowException(String.format("IO Exception occured while adding file %s to JCR",
+                    doc.getName()), ie, (e, t) -> new RuntimeException(e, t));
+        } catch (RepositoryException re) {
+            logAndThrowException(String.format("JCR Exception occured while adding file %s to JCR",
+                    doc.getName()), re, (e, t) -> new JcrException(e, t));
+        } finally {
+            if (jcrBinaryData != null) {
+                jcrBinaryData.dispose();
+            }
+        }
+    }
+
+    protected void setMetaDataTo(Node resNode, Metadata metadata) throws RepositoryException {
+        resNode.setProperty(DlibConstants.DLIB_DOC_TITLE, metadata.getTitle());
+        resNode.setProperty(DlibConstants.DLIB_DOC_VOL, metadata.getVolume());
+        resNode.setProperty(DlibConstants.DLIB_DOC_PUBLISHER, metadata.getPublisher());
+        resNode.setProperty(DlibConstants.DLIB_DOC_BARCODE, metadata.getBarCode());
+        resNode.setProperty(DlibConstants.DLIB_DOC_ISBN, metadata.getIsbn());
+        resNode.setProperty(DlibConstants.DLIB_DOC_AUTHORS,
+                toStringArray(metadata.getAuthorNames(), s -> s));
+        resNode.setProperty(DlibConstants.DLIB_DOC_SUMMARY, metadata.getSummary());
+        resNode.setProperty(DlibConstants.DLIB_DOC_TAGS,
+                toStringArray(metadata.getTags(), s -> s));
+    }
+
+    public void saveDoc(Document doc) {
+        repoHolder.getCurrentTenantRepo()
+                .doWithNode(DIGILIB_WORKSPACE, Optional.empty(),
+                        (session, node) -> {
+                            if (findDocNode(node, doc.getName()).isPresent()) {
+                                logAndThrowException("File Already Exists!", null,
+                                        (e, t) -> new RuntimeException(e, t));
+                            } else {
+                                createFileNode(doc, session, node);
+                            }
+                        }, true);
+    }
+
+    private void setMetadataFromProps(Metadata metadata, Property p) throws RepositoryException {
+        log.debug("Extracting metadata property {}", p.getName());
+        switch (p.getName()) {
+            case DlibConstants.DLIB_DOC_TITLE:
+                metadata.setTitle(p.getString());
+                break;
+            case DlibConstants.DLIB_DOC_ISBN:
+                metadata.setIsbn(p.getString());
+                break;
+            case DlibConstants.DLIB_DOC_BARCODE:
+                metadata.setBarCode(p.getString());
+                break;
+            case DlibConstants.DLIB_DOC_SUMMARY:
+                metadata.setSummary(p.getString());
+                break;
+            case DlibConstants.DLIB_DOC_AUTHORS:
+                metadata.setAuthorNames(toStringSet(() -> new HashSet<>(), p.getValues()));
+                break;
+            case DlibConstants.DLIB_DOC_TAGS:
+                metadata.setTags(toStringSet(() -> new HashSet<>(), p.getValues()));
+                break;
+            case DlibConstants.DLIB_DOC_PUBLISHER:
+                metadata.setPublisher(p.getString());
+                break;
+            case DlibConstants.DLIB_DOC_VOL:
+                metadata.setVolume(p.getString());
+                break;
+            default:
+                log.warn("Unknown property {} was found...", p.getName());
+                break;
+        }
+    }
+
     private Document extractDocument(Node fileNode) {
         Document doc = new Document();
+        Metadata metadata = new Metadata();
         try {
             doc.setName(fileNode.getName());
             Node resNode = fileNode.getNode(Node.JCR_CONTENT);  //
-            PropertyIterator pi = resNode.getProperties("jcr:data | jcr:mimeType | jcr:encoding");
+            PropertyIterator pi = resNode.getProperties();
             while (pi.hasNext()) {
                 Property p = pi.nextProperty();
                 switch (p.getName()) {
                     case Property.JCR_DATA:     //"jcr:data"
-                        try (InputStream in = p.getBinary().getStream()) {
+                        Binary jcrData = p.getBinary();
+                        try (InputStream in = jcrData.getStream()) {
                             Path file = Files.createTempFile(null, null);
                             Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
                             doc.setFile(file.toFile());
                         } catch (IOException ie) {
                             logAndThrowException(String.format("Error while copying document from JCR %s ",
                                     doc.getName()), ie, (e, t) -> new RuntimeException(e, t));
+                        } finally {
+                            jcrData.dispose();
                         }
                         break;
                     case Property.JCR_MIMETYPE:   //"jcr:mimeType"
@@ -165,9 +195,12 @@ public class DigitalLibMgmtService {
                         doc.setEncoding(p.getString());
                         break;
                     default:
+                        setMetadataFromProps(metadata, p);
                         break;
                 }
             }
+            doc.setMetadata(metadata);
+            log.debug("Extracted document {}", doc);
         } catch (RepositoryException re) {
             logAndThrowException(String.format("Error while getting document %s ", doc.getName()),
                     re, (e, t) -> new JcrException(e, t));
@@ -175,50 +208,26 @@ public class DigitalLibMgmtService {
         return doc;
     }
 
-    private Optional<Document> getDocument(Node parentNode, String docName) {
-        return findDocNode(parentNode, docName).map(n -> {
-            Document doc = extractDocument(n);
-            doc.setMetadata(extractMetadata(n));
-            return doc;
-        });
+    private Metadata extractMetadata(Node fileNode) {
+        Metadata metadata = new Metadata();
+        log.debug("Extracting metadata JCR file Node...");
+        try {
+            Node resNode = fileNode.getNode(Node.JCR_CONTENT);  //
+            PropertyIterator pi = resNode.getProperties();
+            while (pi.hasNext()) {
+                setMetadataFromProps(metadata, pi.nextProperty());
+            }
+            log.debug("Extracted doc's {} metadata {}", fileNode.getName(), metadata);
+        } catch (RepositoryException ex) {
+            logAndThrowException(String.format("Error while retrieving metadata from JCR : %s",
+                    ex.getMessage()), ex, (e, t) -> new JcrException(e, t));
+        }
+
+        return metadata;
     }
 
-    private Metadata extractMetadata(Node fileNode) {
-        Metadata retMetadata = new Metadata();
-        String fileName = null;
-        try {
-            fileName = fileNode.getName();
-            PropertyIterator pi = fileNode.getProperties("dlib:*");
-
-            while (pi.hasNext()) {
-                Property p = pi.nextProperty();
-                String pname = p.getName();
-                switch (pname) {
-                    case "dlib:barcode":
-                        retMetadata.setBarCode(p.getString());
-                        break;
-                    case "dlib:isbn":
-                        retMetadata.setBarCode(p.getString());
-                        break;
-                    case "dlib:summary":
-                        retMetadata.setSummary(p.getString());
-                        break;
-                    case "dlib:authors":
-                        retMetadata.setAuthorNames(toStringSet(() -> new HashSet<>(), p.getValues()));
-                        break;
-                    case "dlib:tags":
-                        retMetadata.setTags(toStringSet(() -> new HashSet<>(), p.getValues()));
-                        break;
-                    default:
-                        log.warn("Unknown property {} was found...", pname);
-                        break;
-                }
-            }
-        } catch (RepositoryException re) {
-            logAndThrowException(String.format("Error while getting meta data of %s ", fileName),
-                    re, (e, t) -> new JcrException(e, t));
-        }
-        return retMetadata;
+    private Optional<Document> getDocument(Node parentNode, String docName) {
+        return findDocNode(parentNode, docName).map(n -> extractDocument(n));
     }
 
     private Optional<Metadata> getDocumentMetaData(Node parentNode, String docName) {
@@ -272,14 +281,10 @@ public class DigitalLibMgmtService {
         return docNames;
     }
 
-    //
-    //NOTE: both the following search queries are working for search text "text" 
-    //  "SELECT * from [nt:base] as n WHERE CONTAINS(n.*, '" + str + "')";
-    //  "SELECT * from [nt:resource] as n WHERE CONTAINS(n.*, '" + str + "')";
-    // as one of the property ( jcr:mimetype ) contains a value text
-    // however jcr:data is not working since we have put type as binary.
-    // we will have to see enabling tika parser for binary
-    //
+    //NOTE: For binary data type (such as pdf, word doc, xls) to be searched
+    //tika-parsers should be in the class path. 
+    //NOTE 1 : The search should be ordered by lastModifiedDate (or create date) and also
+    //should have pagination
     public Set<String> search(String str) {
         Set<String> docNames = new HashSet<>();
         repoHolder.getCurrentTenantRepo().doWithWorkspace(DIGILIB_WORKSPACE, (session) -> {
@@ -289,8 +294,30 @@ public class DigitalLibMgmtService {
         return docNames;
     }
 
-    public boolean updateDocumentMetadata(String docId, Metadata metadata) {
-        throw new UnsupportedOperationException();
+    private Optional<Metadata> updateDocumentMetadata(Node fileNode, Metadata metadata) {
+        log.debug("Updating metadata JCR file Node...");
+        Optional<Metadata> retMetadata = Optional.empty();
+        try {
+            Node resNode = fileNode.getNode(Node.JCR_CONTENT);  //
+            setMetaDataTo(resNode, metadata);
+            log.debug("Updated doc's {} metadata {}", fileNode.getName(), metadata);
+            retMetadata = Optional.of(extractMetadata(fileNode));
+        } catch (RepositoryException ex) {
+            logAndThrowException(String.format("Error while updating metadata of JCR : %s",
+                    ex.getMessage()), ex, (e, t) -> new JcrException(e, t));
+        }
+        return retMetadata;
+    }
+
+    public Optional<Metadata> updateDocumentMetadata(String docName, Metadata metadata) {
+        AtomicReference<Optional<Metadata>> t = new AtomicReference<>(Optional.empty());
+        repoHolder.getCurrentTenantRepo().doWithNode(DIGILIB_WORKSPACE, Optional.empty(),
+                (s, node) -> {
+                    Node fileNode = findDocNode(node, docName)
+                            .orElseThrow(() -> new RuntimeException(String.format("Doc by name %s not found... ", docName)));
+                    t.set(updateDocumentMetadata(fileNode, metadata));
+                }, true);
+        return t.get();
     }
 
     private void deleteDocNode(Node node) {
@@ -313,7 +340,6 @@ public class DigitalLibMgmtService {
     public void dumpWorkspace() {
         repoHolder.getCurrentTenantRepo()
                 .doWithNode(DIGILIB_WORKSPACE, Optional.empty(),
-                        (s, rootNode) -> JcrUtil.dump(rootNode), false);
+                        (s, rootNode) -> DlibUtil.dump(rootNode), false);
     }
-    
 }

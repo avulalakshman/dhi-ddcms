@@ -1,4 +1,4 @@
-/*
+/*          
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
@@ -24,14 +24,20 @@ public class JcrWrapper {
 
     private final Repository repo;
     private final Credentials credentials;
+    private final Session keepAliveSession;
 
     public JcrWrapper(Repository repo, Credentials cred) {
         this.repo = repo;
         this.credentials = cred;
+        this.keepAliveSession = createKeepAliveSession();
     }
 
+    private Session createKeepAliveSession() {
+        return login();
+    }
+    
     protected Session login(String workspaceName) {
-        log.debug("logging into workspace {}", workspaceName );
+        log.debug("logging into workspace {}", workspaceName);
         try {
             return repo.login(credentials, workspaceName);
         } catch (RepositoryException re) {
@@ -46,7 +52,6 @@ public class JcrWrapper {
     protected Session login() {
         log.debug("logging into default workspace");
         try {
-            
             return repo.login(credentials);
         } catch (RepositoryException re) {
             String errMsg = "Could not login to default workspace of repository "
@@ -61,7 +66,7 @@ public class JcrWrapper {
         return workspaceName.map(wn -> login(wn))
                 .orElse(login());
     }
-    
+
     public void doWithWorkspace(Optional<String> workspaceName,
             Consumer<Session> sessionConsumer, boolean saveWhenDone) {
         Session session = getSession(workspaceName);
@@ -69,7 +74,7 @@ public class JcrWrapper {
             log.debug("Session {} is being delegated...", session);
             sessionConsumer.accept(session);
             log.debug("Session {} has been consumed", session);
-            if ( saveWhenDone ) {
+            if (saveWhenDone) {
                 log.debug("Saving session post consumption... ");
                 session.save();
             }
@@ -83,33 +88,39 @@ public class JcrWrapper {
         }
     }
 
-    public void doWithNode(Optional<String> workspace, 
-            Optional<String> nodePath, 
-            BiConsumer<Session, Node> sessionConsumer, 
+    public void doWithNode(Optional<String> workspace,
+            Optional<String> nodePath,
+            BiConsumer<Session, Node> sessionConsumer,
             boolean saveWhenDone) {
         Session session = getSession(workspace);
         try {
             Node node;
-            if ( nodePath.isPresent() ) {
+            //session operations throws typed exceptions, hence it is clumsier 
+            //to use map operation on nodePath Optional...
+            if (nodePath.isPresent()) {
                 node = session.getNode(nodePath.get());
             } else {
                 node = session.getRootNode();
             }
-            log.debug("Session for workspace {} and  Node {} is being delegated...", 
+            log.debug("Session for workspace {} and  Node {} is being delegated...",
                     workspace, nodePath);
             sessionConsumer.accept(session, node);
             log.debug("Session and Node {} has been consumed", nodePath);
-            if ( saveWhenDone ) {
+            if (saveWhenDone) {
                 log.debug("Saving session post consumption... ");
                 session.save();
             }
         } catch (RepositoryException re) {
             throw new JcrException(String.format("Error during JCR Operation "
-                    + "of Workspace %s and Node %s of Repository %s", 
+                    + "of Workspace %s and Node %s of Repository %s",
                     workspace, nodePath, repo), re);
         } finally {
             log.debug("logging out from Session ", session.toString());
             session.logout();
         }
+    }
+    
+    public void close() {
+        this.keepAliveSession.logout();
     }
 }

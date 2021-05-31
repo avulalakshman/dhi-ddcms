@@ -1,5 +1,6 @@
 package com.heraizen.dhi.dhiddcms.model;
 
+import java.util.HashSet;
 import java.util.Set;
 
 import lombok.AllArgsConstructor;
@@ -13,10 +14,12 @@ import lombok.ToString;
 @ToString
 public class Metadata {
 
-	private String barCode;
-	private String isbn;
-	private Set<String> authorNames;
-	private String summary;
-	private Set<String> tags;
-
+    private String title;
+    private String volume;
+    private String publisher;
+    private String barCode;
+    private String isbn;
+    private Set<String> authorNames = new HashSet<>();
+    private String summary;
+    private Set<String> tags = new HashSet<>();
 }

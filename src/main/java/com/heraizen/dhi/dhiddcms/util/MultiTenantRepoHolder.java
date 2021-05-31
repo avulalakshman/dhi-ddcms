@@ -1,5 +1,7 @@
 package com.heraizen.dhi.dhiddcms.util;
 
+import com.heraizen.dhi.dhiddcms.service.DigitalLibRepoInitializer;
+import com.heraizen.dhi.dhiddcms.service.JcrInitializer;
 import com.heraizen.dhi.dhiddcms.service.JcrWrapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -11,12 +13,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import javax.annotation.PreDestroy;
 import javax.jcr.Credentials;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.commons.JcrUtils;
+import org.springframework.util.MimeType;
 import org.springframework.util.StringUtils;
 
 @Configuration
@@ -40,6 +44,7 @@ public class MultiTenantRepoHolder {
     @PostConstruct
     public void init() {
         Credentials cred = new SimpleCredentials("admin", "admin".toCharArray());
+        JcrInitializer dlibInitializer = new DigitalLibRepoInitializer();
         getTenantRepoDetails().stream().forEach(t -> {
             tenantRepos.computeIfAbsent(t.getTenantId(), tid -> {
                 try {
@@ -49,6 +54,8 @@ public class MultiTenantRepoHolder {
                     Repository r = JcrUtils.getRepository(t.getTenantLocation());
                     log.info("Repository available for Tenant {} at {}",
                             t.getTenantId(), t.getTenantLocation());
+                    log.info("Trying to initialize repository for digilib...");
+                    dlibInitializer.initializeRepo(r, cred);
                     return new JcrWrapper(r, cred);
                 } catch (RepositoryException e) {
                     throw new RuntimeException(String.format("Could not get "
@@ -73,5 +80,10 @@ public class MultiTenantRepoHolder {
         return getTenantRepo(currentTenant)
                 .orElseThrow(()->new RuntimeException(String.format("JCR for Tenant id %s not found",
                         currentTenant)));
+    }
+    
+    @PreDestroy
+    public void close() {
+        tenantRepos.forEach((tn, tjw)-> tjw.close());
     }
 }

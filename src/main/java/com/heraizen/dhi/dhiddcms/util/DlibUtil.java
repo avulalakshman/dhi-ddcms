@@ -6,6 +6,11 @@
 package com.heraizen.dhi.dhiddcms.util;
 
 import com.heraizen.dhi.dhiddcms.service.JcrException;
+import java.util.Collection;
+import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import javax.jcr.Node;
 import javax.jcr.NodeIterator;
 import javax.jcr.Property;
@@ -20,7 +25,19 @@ import lombok.extern.slf4j.Slf4j;
  * @author Pradeepkm
  */
 @Slf4j
-public class JcrUtil {
+public class DlibUtil {
+
+    public static String[] toStringArray(Collection<String> c, Function<String, String> transformer) {
+        return c.stream().map(transformer).toArray(i -> new String[i]);
+    }
+
+    public static Set<String> toStringSet(Supplier<Set<String>> supplier, Value[] vals) throws RepositoryException {
+        Set<String> coll = supplier.get();
+        for (Value v : vals) {
+            coll.add(v.getString());
+        }
+        return coll;
+    }
 
     /**
      * Recursively outputs the contents of the given node.
@@ -45,15 +62,15 @@ public class JcrUtil {
                     // A multi-valued property, print all values 
                     Value[] values = property.getValues();
                     for (Value value : values) {
-                        System.out.println(String.format("%s = %s", 
-                                property.getPath(), 
+                        System.out.println(String.format("%s = %s",
+                                property.getPath(),
                                 value.getType() == PropertyType.BINARY ? "BINARY" : value.getString()));
                     }
                 } else {
                     // A single-valued property 
                     System.out.println(String.format("%s = %s",
-                            property.getPath(), 
-                            property.getType() == PropertyType.BINARY?"BINARY":property.getString()));
+                            property.getPath(),
+                            property.getType() == PropertyType.BINARY ? "BINARY" : property.getString()));
                 }
             }
 
@@ -68,8 +85,5 @@ public class JcrUtil {
             throw new JcrException("Error while dumping Node ", re);
         }
     }
-    
-    private void dumpNamespacePrefix() {
-        
-    }
+
 }
