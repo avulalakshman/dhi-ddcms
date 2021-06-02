@@ -3,9 +3,9 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.heraizen.dhi.dhiddcms.util;
+package com.heraizen.dhi.dhiddcms.service;
 
-import com.heraizen.dhi.dhiddcms.service.JcrException;
+import com.heraizen.dhi.dhiddcms.exceptions.DocLibRepoException;
 import java.util.Collection;
 import java.util.Set;
 import java.util.function.BiFunction;
@@ -82,7 +82,7 @@ public class DlibUtil {
         } catch (RepositoryException re) {
             log.error("Error while dumping node ", re.getMessage());
             log.debug("Error stack trace :", re);
-            throw new JcrException("Error while dumping Node ", re);
+            throw new DocLibRepoException("Error while dumping Node ", re);
         }
     }
 

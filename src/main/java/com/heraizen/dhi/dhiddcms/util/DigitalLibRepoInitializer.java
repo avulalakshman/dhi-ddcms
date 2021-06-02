@@ -3,9 +3,11 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.heraizen.dhi.dhiddcms.service;
+package com.heraizen.dhi.dhiddcms.util;
 
-import com.heraizen.dhi.dhiddcms.util.DlibConstants;
+import com.heraizen.dhi.dhiddcms.exceptions.DocLibRepoException;
+import com.heraizen.dhi.dhiddcms.service.DlibConstants;
+import com.heraizen.dhi.dhiddcms.service.JcrInitializer;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -47,7 +49,7 @@ public class DigitalLibRepoInitializer implements JcrInitializer {
                     + "for Dlib Workspace and error is: %s", ex.getMessage());
             log.error(errMsg);
             log.debug("Stack trace: ", ex);
-            throw new JcrException(errMsg, ex);
+            throw new DocLibRepoException(errMsg, ex);
         }
     }
 
@@ -69,7 +71,7 @@ public class DigitalLibRepoInitializer implements JcrInitializer {
                     DlibConstants.DLIB_WS_NAME, ex.getMessage());
             log.error(errMsg);
             log.debug("Stack trace: ", ex);
-            throw new JcrException(errMsg, ex);
+            throw new DocLibRepoException(errMsg, ex);
         }
     }
 
@@ -96,7 +98,7 @@ public class DigitalLibRepoInitializer implements JcrInitializer {
                     repo.toString(), ex.getMessage());
             log.error(errMsg);
             log.debug("Stack trace:", ex);
-            throw new JcrException(errMsg);
+            throw new DocLibRepoException(errMsg);
         }
     }
 }

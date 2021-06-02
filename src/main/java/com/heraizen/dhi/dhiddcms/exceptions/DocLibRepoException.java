@@ -3,19 +3,19 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.heraizen.dhi.dhiddcms.service;
+package com.heraizen.dhi.dhiddcms.exceptions;
 
 /**
  *
  * @author Pradeepkm
  */
-public class JcrException extends RuntimeException {
+public class DocLibRepoException extends RuntimeException {
 
-    public JcrException(String string) {
-        super(string);
+    public DocLibRepoException(String message) {
+        super(message);
     }
 
-    public JcrException(String string, Throwable thrwbl) {
+    public DocLibRepoException(String string, Throwable thrwbl) {
         super(string, thrwbl);
     }
 

@@ -5,6 +5,7 @@
  */
 package com.heraizen.dhi.dhiddcms.service;
 
+import com.heraizen.dhi.dhiddcms.exceptions.DocLibRepoException;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -35,7 +36,7 @@ public class JcrWrapper {
     private Session createKeepAliveSession() {
         return login();
     }
-    
+
     protected Session login(String workspaceName) {
         log.debug("logging into workspace {}", workspaceName);
         try {
@@ -44,8 +45,8 @@ public class JcrWrapper {
             String errMsg = String.format("Error while logging into workspace %s of Repository repo %s",
                     workspaceName, repo);
             log.error(errMsg + ":" + re.getMessage());
-            log.debug("JCR error ", re);
-            throw new JcrException(errMsg + repo.toString(), re);
+            log.debug("JCR Error Stack trace : ", re);
+            throw new DocLibRepoException("Could not login to Workspace of Doc Lib Repository");
         }
     }
 
@@ -58,7 +59,7 @@ public class JcrWrapper {
                     + repo.toString();
             log.error(errMsg + " : " + re.getMessage());
             log.debug("JCR error :", re);
-            throw new JcrException(errMsg, re);
+            throw new DocLibRepoException("Could not login to Workspace of Doc Lib Repository");
         }
     }
 
@@ -79,9 +80,10 @@ public class JcrWrapper {
                 session.save();
             }
         } catch (RepositoryException ex) {
-            throw new JcrException(String.format("Error while working on"
-                    + " workspace %s of Repository %s ", workspaceName, repo),
-                    ex);
+            log.error("Error while consuming session (mostly during session save)"
+                    + "...workspace {}, session {}, error : {}", workspaceName, session, ex.getMessage());
+            log.debug("Stack trace: ", ex);
+            throw new DocLibRepoException(String.format("Internal repository error while saving session"));
         } finally {
             log.debug("logging out from session {}", session.toString());
             session.logout();
@@ -111,15 +113,16 @@ public class JcrWrapper {
                 session.save();
             }
         } catch (RepositoryException re) {
-            throw new JcrException(String.format("Error during JCR Operation "
-                    + "of Workspace %s and Node %s of Repository %s",
-                    workspace, nodePath, repo), re);
+            log.error("Error while consuming session (mostly during session save)"
+                    + "...workspace {}, session {}, error : {}", workspace, session, re.getMessage());
+            log.debug("Stack trace: ", re);
+            throw new DocLibRepoException(String.format("Internal repository error while saving session"));
         } finally {
             log.debug("logging out from Session ", session.toString());
             session.logout();
         }
     }
-    
+
     public void close() {
         this.keepAliveSession.logout();
     }
