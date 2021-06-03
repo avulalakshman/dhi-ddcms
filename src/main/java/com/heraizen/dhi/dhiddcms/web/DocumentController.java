@@ -24,12 +24,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.heraizen.dhi.dhiddcms.model.Metadata;
 import com.heraizen.dhi.dhiddcms.util.TenantContext;
-
 import com.heraizen.dhi.dhiddcms.model.Document;
 import com.heraizen.dhi.dhiddcms.service.DigitalLibMgmtService;
-import java.io.FileInputStream;
 import java.util.Map;
-import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.RequestParam;
 
@@ -64,25 +62,25 @@ public class DocumentController {
     @PostMapping(value = "{tenant}/save", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> save(@PathVariable String tenant, @RequestPart("file") MultipartFile multipartFile,
             @RequestPart("metadata") String metadata) {
-        TenantContext.setTenant(tenant);        
+        TenantContext.setTenant(tenant);
         try {
             Document doc = toDocument(multipartFile, metadata);
             digiLibSvc.saveDoc(doc);
             try {
                 Files.deleteIfExists(doc.getFile().toPath());
-            }catch(IOException ie) {
-                log.warn("Could not delete temporary file {}...Ignoring err : {}", 
+            } catch (IOException ie) {
+                log.warn("Could not delete temporary file {}...Ignoring err : {}",
                         doc.getFile(), ie.getMessage());
             }
             return ResponseEntity.status(HttpStatus.CREATED)
-                .body(doc.getName() + " successfully saved into Document library");
+                    .body(doc.getName() + " successfully saved into Document library");
         } catch (JsonProcessingException jpe) {
             log.error("Error while parsing metadata of {} : {}", multipartFile.getName(), jpe.getMessage());
             log.debug("Stack trace :", jpe);
             return ResponseEntity.badRequest()
                     .body("Could not parse metadata of file " + multipartFile.getName());
         } catch (IOException ie) {
-            log.error("Error while reading Multi part file {} : {}", 
+            log.error("Error while reading Multi part file {} : {}",
                     multipartFile.getName(), ie.getMessage());
             log.debug("Stack trace :", ie);
             return ResponseEntity.badRequest()
@@ -106,24 +104,13 @@ public class DocumentController {
         log.info("Found Document {} in Digi Lib...Returning Doc content...", doc);
         MediaType mt = MediaType.valueOf(doc.getMimeType());
         log.debug("Media Type : {}", mt);
-        ResponseEntity<?> retEntity;
-        try (FileInputStream fileStream = new FileInputStream(doc.getFile())) {
-            InputStreamResource resource = new InputStreamResource(fileStream);
-            retEntity = ResponseEntity.ok()
-                    .header(HttpHeaders.CONTENT_DISPOSITION,
-                            "attachment;filename=" + doc.getName()) // Content-Disposition
-                    .contentType(mt)                       // Content-Type
-                    .contentLength(doc.getFile().length()) // Content-Length
-                    .body(resource);
-        } catch (IOException ex) {
-            String errMsg = String.format("Something wrong with IO while returning document %s error: %s",
-                    docname, ex.getMessage());
-            log.error(errMsg);
-            log.debug("Stack trace:", ex);
-            retEntity = ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(errMsg);
-        }
-        return retEntity;
+        FileSystemResource resource = new FileSystemResource(doc.getFile());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment;filename=" + doc.getName()) // Content-Disposition
+                .contentType(mt) // Content-Type
+                .contentLength(doc.getFile().length()) // Content-Length
+                .body(resource);
     }
 
     @PutMapping("/{tenant}/update_metadata/{docname}")
@@ -131,7 +118,7 @@ public class DocumentController {
         TenantContext.setTenant(tenant);
         digiLibSvc.updateDocumentMetadata(docname, metadata);
         return ResponseEntity.accepted()
-                .body(String.format("Updated %s Metada with %s", docname, metadata));
+                .body(String.format("Updated %s's metadata with %s", docname, metadata));
     }
 
     @GetMapping("{tenant}/search")

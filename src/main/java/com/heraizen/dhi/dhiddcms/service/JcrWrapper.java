@@ -8,13 +8,16 @@ package com.heraizen.dhi.dhiddcms.service;
 import com.heraizen.dhi.dhiddcms.exceptions.DocLibRepoException;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import javax.jcr.Credentials;
 import javax.jcr.Node;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import lombok.extern.slf4j.Slf4j;
+import static org.springframework.util.StringUtils.hasText;
 
 /**
  *
@@ -37,7 +40,7 @@ public class JcrWrapper {
         return login();
     }
 
-    protected Session login(String workspaceName) {
+    private Session login(String workspaceName) {
         log.debug("logging into workspace {}", workspaceName);
         try {
             return repo.login(credentials, workspaceName);
@@ -50,8 +53,8 @@ public class JcrWrapper {
         }
     }
 
-    protected Session login() {
-        log.debug("logging into default workspace");
+    private Session login() {
+        log.debug("logging into default workspace...");
         try {
             return repo.login(credentials);
         } catch (RepositoryException re) {
@@ -63,12 +66,15 @@ public class JcrWrapper {
         }
     }
 
-    protected Session getSession(Optional<String> workspaceName) {
+    private Session getSession(Optional<String> workspaceName) {
+        //NOTE: orElse(login()) will always invoke login() method 
+        //since the param is evaluated even though method is not invoked. 
+        //This was resulting in a leak...
         return workspaceName.map(wn -> login(wn))
-                .orElse(login());
+                .orElseGet(() -> login());
     }
 
-    public void doWithWorkspace(Optional<String> workspaceName,
+    private void doWithWorkspace(Optional<String> workspaceName,
             Consumer<Session> sessionConsumer, boolean saveWhenDone) {
         Session session = getSession(workspaceName);
         try {
@@ -90,20 +96,17 @@ public class JcrWrapper {
         }
     }
 
-    public void doWithNode(Optional<String> workspace,
+    private void doWithNode(Optional<String> workspace,
             Optional<String> nodePath,
             BiConsumer<Session, Node> sessionConsumer,
             boolean saveWhenDone) {
         Session session = getSession(workspace);
         try {
-            Node node;
+            Node node = nodePath.isPresent() ? session.getNode(nodePath.get())
+                    : session.getRootNode();
             //session operations throws typed exceptions, hence it is clumsier 
             //to use map operation on nodePath Optional...
-            if (nodePath.isPresent()) {
-                node = session.getNode(nodePath.get());
-            } else {
-                node = session.getRootNode();
-            }
+
             log.debug("Session for workspace {} and  Node {} is being delegated...",
                     workspace, nodePath);
             sessionConsumer.accept(session, node);
@@ -123,6 +126,102 @@ public class JcrWrapper {
         }
     }
 
+    private <T> T doAndGetWithWorkspace(Optional<String> workspaceName,
+            Function<Session, T> sessionConsumer, boolean saveWhenDone) {
+        Session session = getSession(workspaceName);
+        T retVal;
+        try {
+            log.debug("Session {} is being delegated...", session);
+            retVal = sessionConsumer.apply(session);
+            log.debug("Session {} has been consumed", session);
+            if (saveWhenDone) {
+                log.debug("Saving session post consumption... ");
+                session.save();
+            }
+        } catch (RepositoryException ex) {
+            log.error("Error while consuming session (mostly during session save)"
+                    + "...workspace {}, session {}, error : {}", workspaceName, session, ex.getMessage());
+            log.debug("Stack trace: ", ex);
+            throw new DocLibRepoException(String.format("Internal repository error while saving session"));
+        } finally {
+            log.debug("logging out from session {}", session.toString());
+            session.logout();
+        }
+        return retVal;
+    }
+
+    private <T> T doAndGetWithNode(Optional<String> workspace,
+            Optional<String> nodePath,
+            BiFunction<Session, Node, T> sessionConsumer,
+            boolean saveWhenDone) {
+        Session session = getSession(workspace);
+        T retVal;
+        try {
+            Node node = nodePath.isPresent() ? session.getNode(nodePath.get())
+                    : session.getRootNode();
+            //session operations throws typed exceptions, hence it is clumsier 
+            //to use map operation on nodePath Optional...
+
+            log.debug("Session for workspace {} and  Node {} is being delegated...",
+                    workspace, nodePath);
+            retVal = sessionConsumer.apply(session, node);
+            log.debug("Session and Node {} has been consumed", nodePath);
+            if (saveWhenDone) {
+                log.debug("Saving session post consumption... ");
+                session.save();
+            }
+        } catch (RepositoryException re) {
+            log.error("Error while consuming session (mostly during session save)"
+                    + "...workspace {}, session {}, error : {}", workspace, session, re.getMessage());
+            log.debug("Stack trace: ", re);
+            throw new DocLibRepoException(String.format("Internal repository error while saving session"));
+        } finally {
+            log.debug("logging out from Session ", session.toString());
+            session.logout();
+        }
+        return retVal;
+    }
+    
+    public void doWithWorkspace(String workspaceName,
+            Consumer<Session> sessionConsumer, boolean saveWhenDone) {
+        this.doWithWorkspace(toOptional(workspaceName), sessionConsumer, saveWhenDone);
+    }
+
+    public void doWithNode(String workspaceName,
+            String nodePath,
+            BiConsumer<Session, Node> sessionConsumer,
+            boolean saveWhenDone) {
+        this.doWithNode(toOptional(workspaceName), toOptional(nodePath), 
+                sessionConsumer, saveWhenDone);
+    }
+
+    public void doWithRootNode(String workspaceName, BiConsumer<Session, Node> sessionConsumer,
+            boolean saveWhenDone) {
+        this.doWithNode(workspaceName, (String)null, sessionConsumer, saveWhenDone);
+    }
+    
+    public <T> T doAndGetWithWorkspace(String workspaceName,
+            Function<Session, T> sessionConsumer, boolean saveWhenDone) {
+        return doAndGetWithWorkspace(toOptional(workspaceName), sessionConsumer,
+                saveWhenDone);
+    }
+    
+    public <T> T doAndGetWithNode(String workspaceName,
+            String nodePath,
+            BiFunction<Session, Node, T> sessionConsumer,
+            boolean saveWhenDone) {
+        return doAndGetWithNode(toOptional(workspaceName), toOptional(nodePath), 
+                sessionConsumer, saveWhenDone);
+    }
+    
+    public <T> T doAndGetWithRootNode(String workspaceName, BiFunction<Session, Node, T> sessionConsumer, boolean saveWhenDone ) {
+        return this.doAndGetWithNode(workspaceName, (String)null, sessionConsumer, saveWhenDone);
+    }
+    
+    private Optional<String> toOptional(String s) {
+        return hasText(s) ? Optional.of(s.trim()):Optional.empty();
+    }
+    
     public void close() {
         this.keepAliveSession.logout();
     }
