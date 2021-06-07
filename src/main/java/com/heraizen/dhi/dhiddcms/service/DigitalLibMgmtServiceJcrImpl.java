@@ -16,6 +16,7 @@ import com.heraizen.dhi.dhiddcms.util.MultiTenantRepoHolder;
 import static com.heraizen.dhi.dhiddcms.service.DlibUtil.toStringArray;
 import static com.heraizen.dhi.dhiddcms.service.DlibUtil.toStringSet;
 import java.io.BufferedInputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -161,32 +162,39 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
         }
     }
 
+    private File readFileData(Property p) throws RepositoryException {
+        File file=null;
+        Binary jcrData = p.getBinary();
+        try (InputStream dataStream = jcrData.getStream()) {
+            Path filePath = Files.createTempFile(null, null);
+            Files.copy(dataStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+            file = filePath.toFile();
+        } catch (IOException ie) {
+            logAndThrowException(String.format("IO Error while copying "
+                    + "document content from internal repository "),
+                    ie, (e, t) -> new DocLibIOException(e));
+        } finally {
+            jcrData.dispose();
+        }
+        return file;
+    }
+
     private Document extractDocument(Node fileNode) {
         Document doc = new Document();
         Metadata metadata = new Metadata();
         log.debug("Extracting document and metadata from node {}", fileNode);
         try {
-            doc.setName(fileNode.getName());
+            String docName = fileNode.getName();
+            log.info("Reading content and other metadata from properties of {} ", docName);
+            doc.setName(docName);
             Node resNode = fileNode.getNode(Node.JCR_CONTENT);  //
-
             PropertyIterator pi = resNode.getProperties("jcr:data | jcr:mimeType | jcr:encoding | dlib:*");
             while (pi.hasNext()) {
                 Property p = pi.nextProperty();
                 log.debug("Doc extraction, found property {} ", p.getName());
                 switch (p.getName()) {
-                    case "jcr:data":     //Property.JCR_DATA
-                        Binary jcrData = p.getBinary();
-                        try (InputStream in = jcrData.getStream()) {
-                            Path file = Files.createTempFile(null, null);
-                            Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
-                            doc.setFile(file.toFile());
-                        } catch (IOException ie) {
-                            logAndThrowException(String.format("IO Error while copying "
-                                    + "document from internal repository %s ", doc.getName()),
-                                    ie, (e, t) -> new DocLibIOException(e));
-                        } finally {
-                            jcrData.dispose();
-                        }
+                    case "jcr:data":            //Property.JCR_DATA
+                        doc.setFile(readFileData(p));
                         break;
                     case "jcr:mimeType":        //Property.JCR_MIMETYPE
                         doc.setMimeType(p.getString());
