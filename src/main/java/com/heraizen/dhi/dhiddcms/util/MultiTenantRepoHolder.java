@@ -1,46 +1,40 @@
 package com.heraizen.dhi.dhiddcms.util;
 
-import com.heraizen.dhi.dhiddcms.service.JcrWrapper;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.PropertySource;
-
-import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+
+import javax.annotation.PostConstruct;
 import javax.jcr.Credentials;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 import javax.jcr.SimpleCredentials;
 
 import org.apache.jackrabbit.commons.JcrUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.util.StringUtils;
 
+import com.heraizen.dhi.dhiddcms.service.JcrWrapper;
+
+import lombok.extern.slf4j.Slf4j;
+
 @Configuration
-@ConfigurationProperties(prefix = "dhiddcms")
-@PropertySource(value = "classpath:tenantrepo.yaml", factory = YamlPropertySourceFactory.class)
 @Slf4j
 public class MultiTenantRepoHolder {
-
-    private List<TenantRepoDetails> tenantRepoDetails;
+	
+	@Autowired
+    private YamlReaderUtil yamlReaderUtil;
 
     private final Map<String, JcrWrapper> tenantRepos = new ConcurrentHashMap<>();
     
-    public List<TenantRepoDetails> getTenantRepoDetails() {
-        return tenantRepoDetails;
-    }
-
-    public void setTenantRepoDetails(List<TenantRepoDetails> tenantRepoDetails) {
-        this.tenantRepoDetails = tenantRepoDetails;
-    }
 
     @PostConstruct
     public void init() {
         Credentials cred = new SimpleCredentials("admin", "admin".toCharArray());
-        getTenantRepoDetails().stream().forEach(t -> {
+        List<TenantRepoDetails> tenantRepoList = yamlReaderUtil.getTenantDetails();
+        tenantRepoList.stream().forEach(t -> {
             tenantRepos.computeIfAbsent(t.getTenantId(), tid -> {
                 try {
                     log.debug(" Trying to initiate repository for "

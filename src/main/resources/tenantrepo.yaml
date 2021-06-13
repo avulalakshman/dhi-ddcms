@@ -1,5 +1,7 @@
-dhiddcms:
-  tenantRepoDetails:
-    - tenantId: AITE
-      tenantLocation: file:///temp/dsjcr/aite/
+---
+tenantId: AITE
+tenantLocation: file:///temp/dsjcr/aite/
+---
+tenantId: SOMEOTHER
+tenantLocation: file:///temp/dsjcr/SOMEOTHER/
     
