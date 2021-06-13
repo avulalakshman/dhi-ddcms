@@ -16,7 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class YamlReaderUtil {
 
-	private List<TenantRepoDetails> tenantDetails = new ArrayList<TenantRepoDetails>();
+	private List<TenantRepoDetails> tenantRepoDetails = new ArrayList<TenantRepoDetails>();
 
 	@PostConstruct
 	public void loadTenantRepoDetails() {
@@ -25,15 +25,17 @@ public class YamlReaderUtil {
 			Iterable<Object> obj = yaml.loadAll(in);
 			for (Object o : obj) {
 				TenantRepoDetails trd = (TenantRepoDetails) o;
-				tenantDetails.add(trd);
+				getTenantRepoDetails().add(trd);
 			}
 		} catch (Exception e) {
 			log.error("While loading tenant repo yaml {}", e);
 		}
 	}
 
-	public List<TenantRepoDetails> getTenantDetails() {
-		return tenantDetails;
+	public List<TenantRepoDetails> getTenantRepoDetails() {
+		return tenantRepoDetails;
 	}
+
+
 
 }

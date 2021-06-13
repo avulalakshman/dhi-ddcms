@@ -5,18 +5,13 @@
  */
 package com.heraizen.dhi.dhiddcms.service;
 
+import javax.jcr.Credentials;
+import javax.jcr.Repository;
+
 /**
  *
  * @author Pradeepkm
  */
-public class JcrException extends RuntimeException {
-
-    public JcrException(String string) {
-        super(string);
-    }
-
-    public JcrException(String string, Throwable thrwbl) {
-        super(string, thrwbl);
-    }
-
+public interface JcrInitializer {
+    public void initializeRepo(Repository repo, Credentials cred);
 }

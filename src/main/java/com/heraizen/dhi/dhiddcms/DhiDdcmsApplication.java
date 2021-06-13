@@ -21,7 +21,7 @@ public class DhiDdcmsApplication{
 	@Bean
 	public CommandLineRunner runner() {
 		return (String... args)->{
-			System.out.println(yamlReaderUtil.getTenantDetails().size());
+			System.out.println(yamlReaderUtil.getTenantRepoDetails().size());
 		};
 	}
 
