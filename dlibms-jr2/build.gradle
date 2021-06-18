@@ -1,0 +1,34 @@
+plugins {
+    id 'org.springframework.boot' version "${springBootVersion}"
+    id 'io.spring.dependency-management' version "${springDepMgmtVersion}"
+    id 'com.gorylenko.gradle-git-properties' version "2.2.2"    
+}
+
+dependencies {
+    implementation project(':dms-jcr')
+    developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    implementation 'org.apache.jackrabbit:jackrabbit-core:2.20.2'
+}
+
+
+jar {
+    enabled = true
+    manifest {
+        attributes(         
+            'Main-Class': 'com.heraizen.dhi.dlibms.DhiDdcmsApplication'
+        )
+    }
+}
+
+bootJar {
+    classifier = 'application'
+    launchScript()
+}
+
+springBoot {
+    buildInfo()
+}
+
+dependencyManagement {
+    imports { mavenBom("org.springframework.boot:spring-boot-dependencies:${springBootVersion}") }
+}

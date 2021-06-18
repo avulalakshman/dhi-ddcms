@@ -1,0 +1,17 @@
+plugins {
+    id 'io.spring.dependency-management' version "${springDepMgmtVersion}"
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'        
+    implementation 'javax.jcr:jcr:2.0'
+    //NOTE: The app works without the following dependency.
+    //But, it will not search quasi binary data such as pdf, word doc
+    //Including this dependency and sending mimetype will do full text search 
+    //on binary files
+    implementation 'org.apache.tika:tika-parsers:1.24.1'
+}
+
+dependencyManagement {
+    imports { mavenBom("org.springframework.boot:spring-boot-dependencies:${springBootVersion}") }
+}

@@ -1,40 +1,117 @@
-plugins {
-    id 'org.springframework.boot' version '2.4.5'
-    id 'io.spring.dependency-management' version '1.0.11.RELEASE'
-    id 'java'
-}
-
-group = 'com.heraizen.dhi'
-version = '0.0.1-SNAPSHOT'
-sourceCompatibility = '1.8'
-
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
+//root project repo configuration
+buildscript {
+    repositories { 
+        mavenLocal()
+        maven { url archivaUrl }
+        mavenCentral() 
     }
 }
 
-repositories {
-    mavenCentral()
+//plugin for root project - sonar plugin has to be applied at root
+
+plugins {
+    id "org.sonarqube" version "2.6.2"
+    id 'pl.allegro.tech.build.axion-release' version "1.12.1"
+    id 'java'
 }
 
-dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'
-    compileOnly 'org.projectlombok:lombok'
-    developmentOnly 'org.springframework.boot:spring-boot-devtools'
-    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-    annotationProcessor 'org.projectlombok:lombok'
-        
-    implementation 'javax.jcr:jcr:2.0'
-    implementation 'org.apache.jackrabbit:jackrabbit-core:2.20.2'
-    //NOTE: The app works without the following dependency.
-    //But, it will not search quasi binary data such as pdf, word doc
-    //Including this dependency and sending mimetype will do full text search 
-    //on binary files
-    implementation 'org.apache.tika:tika-parsers:1.24.1'
-    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+group = 'com.heraizen'
+version = '0.0.1-SNAPSHOT'
+sourceCompatibility = '1.8'
+
+scmVersion {
+    repository.customUsername = getProperty('gitUser')
+    repository.customPassword = getProperty('gitPasswd')
 }
 
-test {
-    useJUnitPlatform()
+//config for sub projects
+subprojects {
+    buildscript {
+        repositories { 
+            mavenLocal()
+            maven { url archivaSnapshotsUrl }
+            maven { url archivaUrl }
+            mavenCentral() 
+        }
+    }
+    
+    ext { springBootVersion = '2.4.5' }
+    ext { springDepMgmtVersion = '1.0.11.RELEASE' }
+    
+    apply plugin: 'java'
+    apply plugin: 'maven-publish'
+    apply plugin: 'jacoco'
+    
+    sourceCompatibility = 1.8
+    
+    group = 'com.heraizen'
+    
+    repositories {
+        mavenLocal()
+        maven { url archivaSnapshotsUrl }
+        maven { url archivaUrl }
+        mavenCentral()
+    }
+    
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+
+    test {
+        useJUnitPlatform()
+        testLogging {
+            outputs.upToDateWhen {false}
+            showStandardStreams = true
+        }
+    }
+
+    afterEvaluate {
+        project.version = scmVersion.version.endsWith('SNAPSHOT') ?
+	    scmVersion.version:scmVersion.version+".RELEASE"
+        println project.name + " SCM Version: " + scmVersion.version + " project.version: " + project.version + " version: " + version
+    }
+    
+    dependencies {
+	compileOnly 'org.projectlombok:lombok'
+	//developmentOnly 'org.springframework.boot:spring-boot-devtools'
+	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	
+	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    }
+
+    //NOTE: project.version is available afterEvaluate otherwise it is unspecified here
+    publishing {
+        publications {
+            mavenJava(MavenPublication){
+                // bootJar is the default build task configured by Spring Boot
+                artifact jar
+            }
+        }
+        repositories {
+            maven {
+                name "Archiva"
+                afterEvaluate {
+                    url = project.version.endsWith('SNAPSHOT') ? archivaSnapshotsUrl : archivaUrl
+                    println "Project " + project  + " Publish Url " + url
+                }
+                credentials {
+                    username = mavenUser
+                    password = mavenPassword
+                }
+            }
+        }
+    }
+
+    //A simple Task to save on keyboard typing! mimics maven install
+    task install(dependsOn:publishToMavenLocal) {
+        description 'Publishes to Local Maven Repository'
+        group 'Publishing'
+        doLast{ println "Installed to Maven Local Repository" }
+    }
 }
+
