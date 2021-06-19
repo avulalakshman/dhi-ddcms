@@ -3,13 +3,21 @@ plugins {
 }
 
 dependencies {
-    implementation 'org.springframework.boot:spring-boot-starter-web'        
     implementation 'javax.jcr:jcr:2.0'
+    implementation 'org.springframework:spring-web'
+    implementation 'com.fasterxml.jackson.core:jackson-core'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    
+    //Test cases require a JCR implementation hence use jackrabbit2
+    testImplementation 'org.apache.jackrabbit:jackrabbit-core:2.20.2'
+    
     //NOTE: The app works without the following dependency.
     //But, it will not search quasi binary data such as pdf, word doc
     //Including this dependency and sending mimetype will do full text search 
     //on binary files
-    implementation 'org.apache.tika:tika-parsers:1.24.1'
+    //however, during the test since we need to search some of those
+    //files, we are including the tika-parsers 
+    testImplementation 'org.apache.tika:tika-parsers:1.24.1'
 }
 
 dependencyManagement {

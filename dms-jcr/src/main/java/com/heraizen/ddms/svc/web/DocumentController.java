@@ -32,7 +32,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
-@RequestMapping("/api/v1/")
+@RequestMapping("/doclibapi/v1/")
 @Slf4j
 public class DocumentController {
 
@@ -59,10 +59,9 @@ public class DocumentController {
                 .build();
     }
 
-    @PostMapping(value = "{tenant}/save", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping(value = "/save", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
     public ResponseEntity<?> save(@PathVariable String tenant, @RequestPart("file") MultipartFile multipartFile,
             @RequestPart("metadata") String metadata) {
-//        TenantContext.setTenant(tenant);
         try {
             Document doc = toDocument(multipartFile, metadata);
             digiLibSvc.saveDoc(doc);
@@ -88,18 +87,16 @@ public class DocumentController {
         }
     }
 
-    @GetMapping("{tenant}/metadata/{docname}")
+    @GetMapping("/metadata/{docname}")
     public ResponseEntity<?> getDocMetadata(@PathVariable String tenant, @PathVariable String docname) {
         log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
-//        TenantContext.setTenant(tenant);
         Metadata md = digiLibSvc.getDocumentMetadata(docname);
         return ResponseEntity.ok(md);
     }
 
-    @GetMapping("{tenant}/{docname}")
+    @GetMapping("/getdoc/{docname}")
     public ResponseEntity<?> getDoc(@PathVariable String tenant, @PathVariable String docname) {
         log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
-//        TenantContext.setTenant(tenant);
         Document doc = digiLibSvc.getDocument(docname);
         log.info("Found Document {} in Digi Lib...Returning Doc content...", doc);
         MediaType mt = MediaType.valueOf(doc.getMimeType());
@@ -113,77 +110,31 @@ public class DocumentController {
                 .body(resource);
     }
 
-    @PutMapping("/{tenant}/update_metadata/{docname}")
+    @PutMapping("/update_metadata/{docname}")
     public ResponseEntity<?> updateMetadata(@PathVariable String tenant, @PathVariable String docname, @RequestBody Metadata metadata) {
-//        TenantContext.setTenant(tenant);
         digiLibSvc.updateDocumentMetadata(docname, metadata);
         return ResponseEntity.accepted()
                 .body(String.format("Updated %s's metadata with %s", docname, metadata));
     }
 
-    @GetMapping("{tenant}/search")
+    @GetMapping("/search")
     public ResponseEntity<?> search(@PathVariable String tenant, @RequestParam String searchStr) {
         log.debug("Invoked search for tenant {} and search string {}", tenant, searchStr);
-//        TenantContext.setTenant(tenant);
         Map<String, Metadata> docMetadata = digiLibSvc.searchDocsWith(searchStr);
         return ResponseEntity.ok(docMetadata);
     }
 
-    @PostMapping("{tenant}/deletedoc/{docname}")
+    @PostMapping("/deletedoc/{docname}")
     public ResponseEntity<?> deleteDoc(@PathVariable String tenant, @PathVariable String docname) {
         log.debug("Deleting the document {} for tenant {}", docname, tenant);
-//        TenantContext.setTenant(tenant);
         digiLibSvc.deleteDoc(docname);
         return ResponseEntity.ok(docname + " deleted!");
-    }
-
-    @GetMapping("metadata/{docname}")
-    public ResponseEntity<?> getDocMetadata(@PathVariable String docname) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
-    }
-
-    @GetMapping("{docid}")
-    public ResponseEntity<?> getDoc(@PathVariable String docid) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
-    }
-
-    @PutMapping("{docid}/")
-    public ResponseEntity<?> updateMetadata(@PathVariable String docid, @RequestBody Metadata metadata) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
-    }
-
-    @GetMapping("search/{searchkeyword}")
-    public ResponseEntity<?> search(@PathVariable String searchkeyword) {
-        return new ResponseEntity<>("Not Yet Implemented", HttpStatus.BAD_REQUEST);
     }
 
     @GetMapping("{tenant}/dumpws")
     public ResponseEntity<?> dumpWorkspace(@PathVariable String tenant) {
         log.debug("Invoked dump ws for tenant {}", tenant);
-//        TenantContext.setTenant(tenant);
         digiLibSvc.dump();
         return ResponseEntity.ok("Done");
     }
-
-    private Document getDocument(MultipartFile multipartFile, String metadataStr) {
-        try {
-            Path tempFile = Files.createTempFile("dlib", "tmp");
-            String fileName = multipartFile.getOriginalFilename();
-            String mimeType = multipartFile.getContentType();
-            Metadata metadata = objectMapper.readValue(metadataStr, Metadata.class);
-            log.debug("Extracting document fileName: {} \n mimeType: {} \n encoding : UTF_8 \n MetaData : {} \n ",
-                    fileName, mimeType, metadata);
-            multipartFile.transferTo(tempFile);
-            return Document.builder().file(tempFile.toFile()).name(fileName).mimeType(multipartFile.getContentType())
-                    .encoding("UTF_8").metadata(metadata).build();
-        } catch (JsonProcessingException jpe) {
-            log.error("Error while parsing metadata", jpe.getMessage());
-            log.debug("Stack trace :", jpe);
-        } catch (IOException ie) {
-            log.error("Error while reading Multi part file :", ie.getMessage());
-            log.debug("Stack trace :", ie);
-        }
-        return null;
-    }
-
 }

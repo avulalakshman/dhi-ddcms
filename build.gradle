@@ -57,6 +57,9 @@ subprojects {
         compileOnly {
             extendsFrom annotationProcessor
         }
+        testCompileOnly {
+            extendsFrom testAnnotationProcessor
+        }
     }
 
     test {
@@ -69,18 +72,18 @@ subprojects {
 
     afterEvaluate {
         project.version = scmVersion.version.endsWith('SNAPSHOT') ?
-	    scmVersion.version:scmVersion.version+".RELEASE"
+        scmVersion.version:scmVersion.version+".RELEASE"
         println project.name + " SCM Version: " + scmVersion.version + " project.version: " + project.version + " version: " + version
     }
     
     dependencies {
+        annotationProcessor 'org.projectlombok:lombok'
 	compileOnly 'org.projectlombok:lombok'
-	//developmentOnly 'org.springframework.boot:spring-boot-devtools'
 	annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-	annotationProcessor 'org.projectlombok:lombok'
-
-	implementation 'org.springframework.boot:spring-boot-starter-web'
-	
+        implementation 'org.springframework.boot:spring-boot-starter'
+        
+        testAnnotationProcessor 'org.projectlombok:lombok'
+        testCompileOnly 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
     }
 

@@ -7,6 +7,7 @@ plugins {
 dependencies {
     implementation project(':dms-jcr')
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
+    implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.apache.jackrabbit:jackrabbit-core:2.20.2'
 }
 
