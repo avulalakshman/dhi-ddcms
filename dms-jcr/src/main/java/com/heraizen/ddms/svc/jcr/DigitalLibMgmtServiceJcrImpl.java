@@ -39,25 +39,24 @@ import javax.jcr.Session;
 import javax.jcr.nodetype.NodeType;
 import javax.jcr.query.Query;
 import javax.jcr.query.QueryResult;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 import org.springframework.util.Assert;
 
 /**
  *
  * @author Pradeepkm
  */
-
 @Slf4j
 public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
 
     public static final String DIGILIB_ROOTNODE = null;
 
-    private final RepoHolder repoHolder;
+    private final DlibmsRepoSource repoSource;
 
-    public DigitalLibMgmtServiceJcrImpl(RepoHolder repoHolder) {
-        this.repoHolder = repoHolder;
+    @Builder
+    protected DigitalLibMgmtServiceJcrImpl(DlibmsRepoSource dlibmsRepoHolder) {
+        this.repoSource = dlibmsRepoHolder;
     }
 
     private static void logAndThrowException(String errMsg, Throwable t,
@@ -318,7 +317,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
                 + "supplied file " + doc.getFile() + " with provided name " + doc.getName()
                 + "seems to be empty");
 
-        repoHolder.getRepo()
+        repoSource.getRepo()
                 .doWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
                         (session, node) -> {
                             if (findDocNode(node, doc.getName()).isPresent()) {
@@ -335,7 +334,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     public Metadata getDocumentMetadata(String docName) {
         Assert.hasText(docName, "Document name MUST be provided for fetching the document metadata");
         log.debug("Getting Metadata of Document {} from Doc Library...");
-        return repoHolder.getRepo()
+        return repoSource.getRepo()
                 .doAndGetWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
                         (s, rnode) -> findDocNode(rnode, docName)
                                 .map(this::extractMetadata)
@@ -348,7 +347,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     public Document getDocument(String docName) {
         Assert.hasText(docName, "Document name must be provided for fetching the document");
         log.debug("Getting Document {} from Doc Library...");
-        return repoHolder.getRepo()
+        return repoSource.getRepo()
                 .doAndGetWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
                         (s, rnode) -> findDocNode(rnode, docName)
                                 .map(this::extractDocument)
@@ -364,7 +363,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     @Override
     public Map<String, Metadata> searchDocsWith(String searchStr) {
         Assert.hasText(searchStr, "Empty search is not supported yet...");
-        return repoHolder.getRepo().doAndGetWithWorkspace(DLIB_WS_NAME, (session) -> {
+        return repoSource.getRepo().doAndGetWithWorkspace(DLIB_WS_NAME, (session) -> {
             String docSearchQry = "SELECT * from [nt:resource] as n WHERE CONTAINS(n.*, '" + searchStr + "')";
             return executeDocSearchQry(session, docSearchQry);
         }, false);
@@ -374,7 +373,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     public void updateDocumentMetadata(String docName, Metadata metadata) {
         Assert.hasText(docName, "Document name must be provided for updating metadata");
         Assert.notNull(docName, "Document metadata can not be null for updation docname :" + docName);
-        repoHolder.getRepo().doWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
+        repoSource.getRepo().doWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
                 (s, rnode) -> {
                     Node docFileNode = findDocNode(rnode, docName)
                             .orElseThrow(() -> new DocNotFoundException(docName
@@ -386,7 +385,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     @Override
     public void deleteDoc(String docName) {
         Assert.hasText(docName, "Document name MUST be provided for deletion!");
-        repoHolder.getRepo().doWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
+        repoSource.getRepo().doWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
                 (s, node) -> deleteDocNode(findDocNode(node, docName)
                         .orElseThrow(() -> new DocNotFoundException(docName + " Not found!"))),
                 true);//save the workspace...
@@ -394,7 +393,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
 
     @Override
     public void dump() {
-        repoHolder.getRepo()
+        repoSource.getRepo()
                 .doWithRootNode(DLIB_WS_NAME, (s, rootNode) -> DlibUtil.dump(rootNode),
                         false); // nothing to save...
     }

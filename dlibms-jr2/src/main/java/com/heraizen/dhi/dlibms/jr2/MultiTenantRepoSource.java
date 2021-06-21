@@ -15,16 +15,16 @@ import org.apache.jackrabbit.commons.JcrUtils;
 import org.springframework.util.StringUtils;
 
 import com.heraizen.ddms.svc.exceptions.DocLibRepoException;
-import com.heraizen.ddms.svc.jcr.JcrInitializer;
+import com.heraizen.ddms.svc.jcr.DlibmsRepo;
 import com.heraizen.ddms.svc.jcr.JcrWrapper;
-import com.heraizen.ddms.svc.jcr.RepoHolder;
 import java.util.function.Supplier;
 import lombok.Builder;
 
 import lombok.extern.slf4j.Slf4j;
+import com.heraizen.ddms.svc.jcr.JcrSource;
 
 @Slf4j
-public class MultiTenantRepoHolder implements RepoHolder {
+public class MultiTenantRepoSource implements JcrSource {
 
     private final YamlReaderUtil yamlReaderUtil;
     private final Supplier<String> tenantResolver;
@@ -32,7 +32,7 @@ public class MultiTenantRepoHolder implements RepoHolder {
     private final Map<String, JcrWrapper> tenantRepos = new ConcurrentHashMap<>();
 
     @Builder
-    public MultiTenantRepoHolder(YamlReaderUtil util, Supplier<String> tenantResolver) {
+    public MultiTenantRepoSource(YamlReaderUtil util, Supplier<String> tenantResolver) {
         this.yamlReaderUtil = util;
         this.tenantResolver = tenantResolver;
     }
@@ -40,8 +40,7 @@ public class MultiTenantRepoHolder implements RepoHolder {
     @PostConstruct
     public void init() {
         Credentials cred = new SimpleCredentials("admin", "admin".toCharArray());
-
-        JcrInitializer dlibInitializer = new DigitalLibRepoInitializer();
+        DlibmsCndNodeTypeImporter ntImporter = new DlibmsCndNodeTypeImporter();
         yamlReaderUtil.getTenantRepoDetails().stream().forEach(t -> {
 
             tenantRepos.computeIfAbsent(t.getTenantId(), tid -> {
@@ -51,8 +50,11 @@ public class MultiTenantRepoHolder implements RepoHolder {
                     Repository r = JcrUtils.getRepository(t.getTenantLocation());
                     log.info("Repository available for Tenant {} at {}", t.getTenantId(), t.getTenantLocation());
                     log.info("Trying to initialize repository for digilib...");
-                    dlibInitializer.initializeRepo(r, cred);
-                    return new JcrWrapper(r, cred);
+                    return DlibmsRepo.repoBuilder()
+                            .repo(r)
+                            .credentials(cred)
+                            .dlibmsNtRegistrationMaker(ntImporter)
+                            .build();
                 } catch (RepositoryException e) {
                     String errMessage = String.format(
                             "Could not start Repository " + "for Tenant %s at Tenant Location %s ", t.getTenantId(),

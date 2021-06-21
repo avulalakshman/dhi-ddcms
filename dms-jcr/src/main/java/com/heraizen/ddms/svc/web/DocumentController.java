@@ -23,7 +23,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.heraizen.ddms.svc.model.Metadata;
-//import com.heraizen.ddms.jcr.jr2.TenantContext;
 import com.heraizen.ddms.svc.model.Document;
 import com.heraizen.ddms.svc.DigitalLibMgmtService;
 import java.util.Map;

@@ -9,6 +9,6 @@ package com.heraizen.ddms.svc.jcr;
  *
  * @author Pradeepkm
  */
-public interface RepoHolder {
+public interface JcrSource {
     public JcrWrapper getRepo();
 }

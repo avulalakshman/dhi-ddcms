@@ -26,14 +26,18 @@ import static org.springframework.util.StringUtils.hasText;
 @Slf4j
 public class JcrWrapper {
 
-    private final Repository repo;
-    private final Credentials credentials;
-    private final Session keepAliveSession;
+    protected final Repository internalRepo;
+    protected final Credentials credentials;
+    protected Session keepAliveSession;
+    protected final JcrInitializer jcrInitializer;
 
-    public JcrWrapper(Repository repo, Credentials cred) {
-        this.repo = repo;
-        this.credentials = cred;
+    protected JcrWrapper(Repository repo, 
+            Credentials repoCredentials, JcrInitializer repoInitializer) {
+        this.internalRepo = repo;
+        this.credentials = repoCredentials;
+        this.jcrInitializer = repoInitializer;
         this.keepAliveSession = createKeepAliveSession();
+        repoInitializer.initializeRepo(repo, repoCredentials);
     }
 
     private Session createKeepAliveSession() {
@@ -43,10 +47,10 @@ public class JcrWrapper {
     private Session login(String workspaceName) {
         log.debug("logging into workspace {}", workspaceName);
         try {
-            return repo.login(credentials, workspaceName);
+            return internalRepo.login(credentials, workspaceName);
         } catch (RepositoryException re) {
             String errMsg = String.format("Error while logging into workspace %s of Repository repo %s",
-                    workspaceName, repo);
+                    workspaceName, internalRepo);
             log.error(errMsg + ":" + re.getMessage());
             log.debug("JCR Error Stack trace : ", re);
             throw new DocLibRepoException("Could not login to Workspace of Doc Lib Repository");
@@ -56,10 +60,10 @@ public class JcrWrapper {
     private Session login() {
         log.debug("logging into default workspace...");
         try {
-            return repo.login(credentials);
+            return internalRepo.login(credentials);
         } catch (RepositoryException re) {
             String errMsg = "Could not login to default workspace of repository "
-                    + repo.toString();
+                    + internalRepo.toString();
             log.error(errMsg + " : " + re.getMessage());
             log.debug("JCR error :", re);
             throw new DocLibRepoException("Could not login to Workspace of Doc Lib Repository");
@@ -181,7 +185,7 @@ public class JcrWrapper {
         }
         return retVal;
     }
-    
+
     public void doWithWorkspace(String workspaceName,
             Consumer<Session> sessionConsumer, boolean saveWhenDone) {
         this.doWithWorkspace(toOptional(workspaceName), sessionConsumer, saveWhenDone);
@@ -191,38 +195,45 @@ public class JcrWrapper {
             String nodePath,
             BiConsumer<Session, Node> sessionConsumer,
             boolean saveWhenDone) {
-        this.doWithNode(toOptional(workspaceName), toOptional(nodePath), 
+        this.doWithNode(toOptional(workspaceName), toOptional(nodePath),
                 sessionConsumer, saveWhenDone);
     }
 
     public void doWithRootNode(String workspaceName, BiConsumer<Session, Node> sessionConsumer,
             boolean saveWhenDone) {
-        this.doWithNode(workspaceName, (String)null, sessionConsumer, saveWhenDone);
+        this.doWithNode(workspaceName, (String) null, sessionConsumer, saveWhenDone);
     }
-    
+
     public <T> T doAndGetWithWorkspace(String workspaceName,
             Function<Session, T> sessionConsumer, boolean saveWhenDone) {
         return doAndGetWithWorkspace(toOptional(workspaceName), sessionConsumer,
                 saveWhenDone);
     }
-    
+
     public <T> T doAndGetWithNode(String workspaceName,
             String nodePath,
             BiFunction<Session, Node, T> sessionConsumer,
             boolean saveWhenDone) {
-        return doAndGetWithNode(toOptional(workspaceName), toOptional(nodePath), 
+        return doAndGetWithNode(toOptional(workspaceName), toOptional(nodePath),
                 sessionConsumer, saveWhenDone);
     }
-    
-    public <T> T doAndGetWithRootNode(String workspaceName, BiFunction<Session, Node, T> sessionConsumer, boolean saveWhenDone ) {
-        return this.doAndGetWithNode(workspaceName, (String)null, sessionConsumer, saveWhenDone);
+
+    public <T> T doAndGetWithRootNode(String workspaceName, BiFunction<Session, Node, T> sessionConsumer, boolean saveWhenDone) {
+        return this.doAndGetWithNode(workspaceName, (String) null, sessionConsumer, saveWhenDone);
     }
-    
+
     private Optional<String> toOptional(String s) {
-        return hasText(s) ? Optional.of(s.trim()):Optional.empty();
+        return hasText(s) ? Optional.of(s.trim()) : Optional.empty();
+    }
+
+    public boolean isLive() {
+        return this.keepAliveSession != null && this.keepAliveSession.isLive();
     }
     
     public void close() {
-        this.keepAliveSession.logout();
+        if ( isLive() ) {
+            this.keepAliveSession.logout();
+        }
+        this.keepAliveSession = null;
     }
 }

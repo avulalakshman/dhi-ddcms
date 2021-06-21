@@ -3,33 +3,33 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package com.heraizen.dhi.dlibms.jr2;
+package com.heraizen.ddms.svc.jcr;
 
 import com.heraizen.ddms.svc.exceptions.DocLibRepoException;
-import com.heraizen.ddms.svc.jcr.DlibConstants;
-import com.heraizen.ddms.svc.jcr.JcrInitializer;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.Reader;
 import javax.jcr.Credentials;
 import javax.jcr.NoSuchWorkspaceException;
 import javax.jcr.Repository;
 import javax.jcr.RepositoryException;
 import javax.jcr.Session;
 import javax.jcr.nodetype.NodeTypeManager;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.jackrabbit.commons.cnd.CndImporter;
-import org.apache.jackrabbit.commons.cnd.ParseException;
-import org.springframework.core.io.ClassPathResource;
 
 /**
  *
  * @author Pradeepkm
  */
 @Slf4j
-public class DigitalLibRepoInitializer implements JcrInitializer {
+public class DlibmsRepoInitializer implements JcrInitializer {
 
     public static final String DLIB_MD_CND_FILENAME = "dlib_metadata.cnd";
+
+    private final DlibmsNodeTypeProvider ntProvider;
+
+    @Builder
+    protected DlibmsRepoInitializer(DlibmsNodeTypeProvider dlibmsNtRegistrationMaker) {
+        this.ntProvider = dlibmsNtRegistrationMaker;
+    }
 
     private void checkAndRegisterNodeType(Session dlibWsSession) {
         try {
@@ -38,13 +38,10 @@ public class DigitalLibRepoInitializer implements JcrInitializer {
 
             if (!ntManager.hasNodeType(DlibConstants.DLIB_NT_METADATA)) {
                 log.warn("Node Type {} is not available, hence Registering it!", DlibConstants.DLIB_NT_METADATA);
-                ClassPathResource resource = new ClassPathResource(DLIB_MD_CND_FILENAME);
-                try (Reader reader = new InputStreamReader(resource.getInputStream())) {
-                    CndImporter.registerNodeTypes(reader, dlibWsSession);
-                }
+                ntProvider.registerDlibNodeType(dlibWsSession);
             }
             log.info("Node Type {} is registered (or was already available)", DlibConstants.DLIB_NT_METADATA);
-        } catch (RepositoryException | ParseException | IOException ex) {
+        } catch (RepositoryException ex) {
             String errMsg = String.format("Error while registering a Node type "
                     + "for Dlib Workspace and error is: %s", ex.getMessage());
             log.error(errMsg);
