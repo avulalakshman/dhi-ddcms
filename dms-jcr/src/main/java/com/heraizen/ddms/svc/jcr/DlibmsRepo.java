@@ -13,7 +13,7 @@ import lombok.Builder;
  *
  * @author Pradeepkm
  */
-public class DlibmsRepo extends JcrWrapper {
+public class DlibmsRepo extends JcrWrapper implements DlibmsRepoSource{
 
     @Builder(builderMethodName = "repoBuilder")
     public DlibmsRepo(Repository repo, Credentials credentials,
@@ -21,5 +21,10 @@ public class DlibmsRepo extends JcrWrapper {
         super(repo, credentials, DlibmsRepoInitializer.builder()
                 .dlibmsNtRegistrationMaker(dlibmsNtRegistrationMaker)
                 .build());
+    }
+
+    @Override
+    public DlibmsRepo getRepo() {
+        return this;
     }
 }

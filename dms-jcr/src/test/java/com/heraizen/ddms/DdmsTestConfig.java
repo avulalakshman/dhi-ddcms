@@ -6,8 +6,8 @@
 package com.heraizen.ddms;
 
 import com.heraizen.ddms.svc.DigitalLibMgmtService;
-import com.heraizen.ddms.svc.jcr.DlibmsSimpleRepoSource;
 import com.heraizen.ddms.svc.jcr.DigitalLibMgmtServiceJcrImpl;
+import com.heraizen.ddms.svc.jcr.DlibmsRepo;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -44,17 +44,17 @@ public class DdmsTestConfig {
 
     @Bean
     DlibmsRepoSource getDlibmsRepoSource(TransientRepository repo) throws IOException, URISyntaxException {
-        return DlibmsSimpleRepoSource.repoSourceBuilder()
+        return DlibmsRepo.repoBuilder()
                 .repo(repo)
-                .repoCredentials(testRepoCredentials)
+                .credentials(testRepoCredentials)
                 .dlibmsNtRegistrationMaker(new DlibmsCndNodeTypeImporter())
                 .build();
     }
 
     @Bean
-    DigitalLibMgmtService getDigitalLibMgmtService(DlibmsRepoSource repoHolder) {
+    DigitalLibMgmtService getDigitalLibMgmtService(DlibmsRepoSource repoSource) {
         return DigitalLibMgmtServiceJcrImpl.builder()
-                .dlibmsRepoHolder(repoHolder)
+                .dlibmsRepoSource(repoSource)
                 .build();
     }
 }

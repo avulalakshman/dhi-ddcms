@@ -7,10 +7,10 @@ import org.springframework.context.annotation.Bean;
 
 
 @SpringBootApplication
-public class DhiDdcmsApplication {
+public class DhiDlibmsApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(DhiDdcmsApplication.class, args);
+        SpringApplication.run(DhiDlibmsApplication.class, args);
     }
 
     @Bean

@@ -55,8 +55,8 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     private final DlibmsRepoSource repoSource;
 
     @Builder
-    protected DigitalLibMgmtServiceJcrImpl(DlibmsRepoSource dlibmsRepoHolder) {
-        this.repoSource = dlibmsRepoHolder;
+    protected DigitalLibMgmtServiceJcrImpl(DlibmsRepoSource dlibmsRepoSource) {
+        this.repoSource = dlibmsRepoSource;
     }
 
     private static void logAndThrowException(String errMsg, Throwable t,
