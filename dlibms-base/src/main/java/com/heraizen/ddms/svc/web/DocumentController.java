@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
+
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,14 +23,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import com.heraizen.ddms.svc.model.Metadata;
 import com.heraizen.ddms.svc.model.Document;
 import com.heraizen.ddms.svc.DigitalLibMgmtService;
-import java.util.Map;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.web.bind.annotation.RequestParam;
 
 @RestController
 @RequestMapping("/doclibapi/v1/")
@@ -59,8 +60,9 @@ public class DocumentController {
     }
 
     @PostMapping(value = "/save", consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.MULTIPART_FORM_DATA_VALUE})
-    public ResponseEntity<?> save(@PathVariable String tenant, @RequestPart("file") MultipartFile multipartFile,
+    public ResponseEntity<?> save(@RequestPart("file") MultipartFile multipartFile,
             @RequestPart("metadata") String metadata) {
+        log.debug("Saving a file into dlib repository...");
         try {
             Document doc = toDocument(multipartFile, metadata);
             digiLibSvc.saveDoc(doc);
@@ -70,6 +72,7 @@ public class DocumentController {
                 log.warn("Could not delete temporary file {}...Ignoring err : {}",
                         doc.getFile(), ie.getMessage());
             }
+            log.info("Successfully saved the document {} into dlib repository...", doc.getName());
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(doc.getName() + " successfully saved into Document library");
         } catch (JsonProcessingException jpe) {
@@ -87,17 +90,17 @@ public class DocumentController {
     }
 
     @GetMapping("/metadata/{docname}")
-    public ResponseEntity<?> getDocMetadata(@PathVariable String tenant, @PathVariable String docname) {
-        log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
+    public ResponseEntity<?> getDocMetadata(@PathVariable String docname) {
+        log.debug("Getting document metadata for doc {}", docname);
         Metadata md = digiLibSvc.getDocumentMetadata(docname);
         return ResponseEntity.ok(md);
     }
 
     @GetMapping("/getdoc/{docname}")
-    public ResponseEntity<?> getDoc(@PathVariable String tenant, @PathVariable String docname) {
-        log.debug("Invoked getDocMetaData for tenant {} and doc name {}", tenant, docname);
+    public ResponseEntity<?> getDoc(@PathVariable String docname) {
+        log.debug("Getting document with name {} from dlib repository...", docname);
         Document doc = digiLibSvc.getDocument(docname);
-        log.info("Found Document {} in Digi Lib...Returning Doc content...", doc);
+        log.info("Found Document {} in dlib repo, returning Doc content...", doc);
         MediaType mt = MediaType.valueOf(doc.getMimeType());
         log.debug("Media Type : {}", mt);
         FileSystemResource resource = new FileSystemResource(doc.getFile());
@@ -110,29 +113,32 @@ public class DocumentController {
     }
 
     @PutMapping("/update_metadata/{docname}")
-    public ResponseEntity<?> updateMetadata(@PathVariable String tenant, @PathVariable String docname, @RequestBody Metadata metadata) {
+    public ResponseEntity<?> updateMetadata(@PathVariable String docname, @RequestBody Metadata metadata) {
+        log.debug("Updating metadata of doc {} ", docname);
         digiLibSvc.updateDocumentMetadata(docname, metadata);
+        log.info("Updated the metadata of doc {}", docname);
         return ResponseEntity.accepted()
                 .body(String.format("Updated %s's metadata with %s", docname, metadata));
     }
 
     @GetMapping("/search")
-    public ResponseEntity<?> search(@PathVariable String tenant, @RequestParam String searchStr) {
-        log.debug("Invoked search for tenant {} and search string {}", tenant, searchStr);
+    public ResponseEntity<?> search(@RequestParam String searchStr) {
+        log.debug("Searching dlib repository for {}", searchStr);
         Map<String, Metadata> docMetadata = digiLibSvc.searchDocsWith(searchStr);
         return ResponseEntity.ok(docMetadata);
     }
 
     @PostMapping("/deletedoc/{docname}")
-    public ResponseEntity<?> deleteDoc(@PathVariable String tenant, @PathVariable String docname) {
-        log.debug("Deleting the document {} for tenant {}", docname, tenant);
+    public ResponseEntity<?> deleteDoc(@PathVariable String docname) {
+        log.debug("Deleting document {} from dlib repository", docname);
         digiLibSvc.deleteDoc(docname);
+        log.info("Deleted the document from dlib repository {}", docname);
         return ResponseEntity.ok(docname + " deleted!");
     }
 
     @GetMapping("{tenant}/dumpws")
-    public ResponseEntity<?> dumpWorkspace(@PathVariable String tenant) {
-        log.debug("Invoked dump ws for tenant {}", tenant);
+    public ResponseEntity<?> dumpWorkspace() {
+        log.debug("Invoked dumping dlibworkspace...");
         digiLibSvc.dump();
         return ResponseEntity.ok("Done");
     }
