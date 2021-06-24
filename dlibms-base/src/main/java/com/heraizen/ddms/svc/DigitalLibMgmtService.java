@@ -16,7 +16,7 @@ import java.util.Map;
  * @author Pradeepkm
  */
 public interface DigitalLibMgmtService {
-    public void saveDoc(Document doc);
+    public boolean saveDoc(Document doc);
     public Document getDocument(String docName);
     public Metadata getDocumentMetadata(String docName);
     public void updateDocumentMetadata(String docName, Metadata metadata);

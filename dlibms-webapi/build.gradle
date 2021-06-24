@@ -1,0 +1,14 @@
+plugins {
+    id 'io.spring.dependency-management' version "${springDepMgmtVersion}"
+}
+
+dependencies {
+    implementation project(':dlibms-base')
+    implementation 'org.springframework:spring-web'
+    implementation 'com.fasterxml.jackson.core:jackson-core'
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+}
+
+dependencyManagement {
+    imports { mavenBom("org.springframework.boot:spring-boot-dependencies:${springBootVersion}") }
+}

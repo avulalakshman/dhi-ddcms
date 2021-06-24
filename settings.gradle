@@ -1,3 +1,4 @@
 rootProject.name = 'dhi-ddcms'
 include 'dlibms-base'
+include 'dlibms-webapi'
 include 'dlibms-jr2'

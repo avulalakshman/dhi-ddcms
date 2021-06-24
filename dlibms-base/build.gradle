@@ -4,11 +4,8 @@ plugins {
 
 dependencies {
     implementation 'javax.jcr:jcr:2.0'
-    implementation 'org.springframework:spring-web'
-    implementation 'com.fasterxml.jackson.core:jackson-core'
-    implementation 'com.fasterxml.jackson.core:jackson-databind'
     
-    //Test cases require a JCR implementation hence use jackrabbit2
+    //Test cases require a JCR implementation, hence for testing use jackrabbit2
     testImplementation 'org.apache.jackrabbit:jackrabbit-core:2.20.2'
     
     //NOTE: The app works without the following dependency.

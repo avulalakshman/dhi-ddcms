@@ -273,6 +273,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
             logAndThrowException(String.format("Internal repository error while searching for %s", qry),
                     re, (e, t) -> new DocLibRepoException(e));
         }
+        log.debug("Returning {} docs as search results for {}", docMetadata.size(), qry);
         return docMetadata;
     }
 
@@ -304,7 +305,7 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
     }
 
     @Override
-    public void saveDoc(Document doc) {
+    public boolean saveDoc(Document doc) {
         Assert.notNull(doc, "Document (obj) can not be NULL while saving the doc into library");
         Assert.hasText(doc.getName(), "Document name should be provided for saving the document into Library");
         Assert.notNull(doc.getFile(), "Document file MUST be available for saving the doc into library");
@@ -317,15 +318,17 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
                 + "supplied file " + doc.getFile() + " with provided name " + doc.getName()
                 + "seems to be empty");
 
-        repoSource.getRepo()
-                .doWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
+        return repoSource.getRepo()
+                .doAndGetWithNode(DLIB_WS_NAME, DIGILIB_ROOTNODE,
                         (session, node) -> {
                             if (findDocNode(node, doc.getName()).isPresent()) {
                                 logAndThrowException(String.format("Cant save! Document "
                                         + "by name %s Already exists ", doc.getName()), null,
                                         (e, t) -> new DocAlreadyExists(e));
+                                return false;
                             } else {
                                 createFileNode(doc, session, node);
+                                return true;
                             }
                         }, true);
     }

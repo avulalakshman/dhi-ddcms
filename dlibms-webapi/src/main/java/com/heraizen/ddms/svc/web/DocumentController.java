@@ -32,7 +32,7 @@ import com.heraizen.ddms.svc.model.Document;
 import com.heraizen.ddms.svc.DigitalLibMgmtService;
 
 @RestController
-@RequestMapping("/doclibapi/v1/")
+@RequestMapping("/doclibapi/v1")
 @Slf4j
 public class DocumentController {
 
@@ -136,7 +136,7 @@ public class DocumentController {
         return ResponseEntity.ok(docname + " deleted!");
     }
 
-    @GetMapping("{tenant}/dumpws")
+    @GetMapping("/dumpws")
     public ResponseEntity<?> dumpWorkspace() {
         log.debug("Invoked dumping dlibworkspace...");
         digiLibSvc.dump();

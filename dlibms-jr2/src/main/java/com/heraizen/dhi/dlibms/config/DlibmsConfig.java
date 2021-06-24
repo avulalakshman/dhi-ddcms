@@ -15,13 +15,13 @@ import com.heraizen.dhi.dlibms.jr2.TenantContext;
 import com.heraizen.dhi.dlibms.jr2.TenantRepoDetails;
 import com.heraizen.dhi.dlibms.jr2.YamlReaderUtil;
 import java.util.List;
-import javax.jcr.RepositoryException;
 import javax.jcr.SimpleCredentials;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import javax.jcr.Credentials;
 import javax.jcr.Repository;
+import javax.jcr.RepositoryException;
 import org.apache.jackrabbit.commons.JcrUtils;
 
 /**
@@ -64,4 +64,5 @@ public class DlibmsConfig {
                 .dlibmsRepoSource(repoSource)
                 .build();
     }
+    
 }
