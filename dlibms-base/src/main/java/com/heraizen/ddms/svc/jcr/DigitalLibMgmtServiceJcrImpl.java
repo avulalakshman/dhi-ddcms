@@ -368,7 +368,9 @@ public class DigitalLibMgmtServiceJcrImpl implements DigitalLibMgmtService {
         Assert.hasText(searchStr, "Empty search is not supported yet...");
         return repoSource.getRepo().doAndGetWithWorkspace(DLIB_WS_NAME, (session) -> {
             String docSearchQry = "SELECT * from [nt:resource] as n WHERE CONTAINS(n.*, '" + searchStr + "')";
-            return executeDocSearchQry(session, docSearchQry);
+            Map<String, Metadata> searchResult = executeDocSearchQry(session, docSearchQry);
+            log.info("Returning {} docs containing string {}:", searchResult.size(), searchStr);
+            return searchResult;
         }, false);
     }
 

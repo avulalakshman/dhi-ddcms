@@ -19,6 +19,7 @@ import org.springframework.core.io.Resource;
 public class YamlReaderUtil {
 
     private static List<TenantRepoDetails> loadTenantDetails(Resource yamlResource) {
+        log.info("Loading tenant details from {}", yamlResource );
         Yaml yaml = new Yaml(new Constructor(TenantRepoDetails.class));
         List<TenantRepoDetails> tenantRepoDetails = new ArrayList<>();
         try (InputStream in = yamlResource.getInputStream()) {
@@ -30,6 +31,7 @@ public class YamlReaderUtil {
             log.debug("Stack trace :\n", ex);
             throw new DocLibIOException(errMsg, ex);
         }
+        log.info("Loaded {} tenant's repo details", tenantRepoDetails.size());
         return tenantRepoDetails;
     }
 

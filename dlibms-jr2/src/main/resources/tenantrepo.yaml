@@ -1,7 +1,6 @@
 ---
 tenantId: AITE
-tenantLocation: file:///temp/dsjcr/aite/
+tenantRepoLocation: file:///temp/dsjcr/aite-dlibms-repo/
 ---
-tenantId: SOMEOTHER
-tenantLocation: file:///temp/dsjcr/SOMEOTHER/
-    
+tenantId: SJCE
+tenantRepoLocation: file:///temp/dsjcr/sjce-dlibms-repo/
